@@ -2,7 +2,7 @@
 
 INFRA_SERVICES := fuseki elasticsearch postgres redis rdf-delta
 
-.PHONY: help setup start stop start\:dev stop\:dev migrate
+.PHONY: help setup start stop start\:dev stop\:dev migrate harvest
 
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_\\:-]+:.*## ' $(MAKEFILE_LIST) | sed 's/\\//g' | awk -F '## ' '{n=$$1; sub(/: .*/, "", n); sub(/:$$/, "", n); printf "  \033[36m%-15s\033[0m %s\n", n, $$2}'
@@ -30,6 +30,9 @@ stop\:dev: ## Stop infrastructure services
 
 migrate: ## Run Prisma migrations
 	pnpm exec prisma migrate deploy
+
+harvest: .env ## Run the harvester against the local Fuseki instance
+	docker compose up harvester
 
 .env:
 	cp .env.example .env

@@ -3,8 +3,6 @@ PREFIX rdf:    <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX tdb2:   <http://jena.apache.org/2016/tdb#>
 PREFIX ja:     <http://jena.hpl.hp.com/2005/11/Assembler#>
 
-[] rdf:type fuseki:Server .
-
 <#service> rdf:type fuseki:Service ;
     fuseki:name "/eden" ;
     fuseki:endpoint [ fuseki:operation fuseki:query ; fuseki:name "sparql" ] ;
@@ -15,4 +13,4 @@ PREFIX ja:     <http://jena.hpl.hp.com/2005/11/Assembler#>
     fuseki:dataset <#dataset> .
 
 <#dataset> rdf:type tdb2:DatasetTDB2 ;
-    tdb2:location "databases/DB2" .
+    tdb2:location "/fuseki-base/databases/eden" .

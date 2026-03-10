@@ -129,6 +129,62 @@ describe('FusekiService', () => {
     });
   });
 
+  describe('authentication', () => {
+    let authenticatedService: FusekiService;
+
+    beforeEach(async () => {
+      const { unit } = await TestBed.solitary(FusekiService)
+        .mock(ConfigService)
+        .impl(() => ({
+          get: jest.fn().mockImplementation((key: symbol) => {
+            if (key === FUSEKI_CONFIG_KEY) {
+              return {
+                FUSEKI_ENDPOINT: fusekiEndpoint,
+                FUSEKI_USERNAME: 'admin',
+                FUSEKI_PASSWORD: 'secret',
+              };
+            }
+            return undefined;
+          }),
+        }))
+        .compile();
+
+      authenticatedService = unit;
+    });
+
+    it('should include Basic Auth header when credentials are configured', async () => {
+      const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ results: { bindings: [] } }),
+      } as Response);
+
+      await authenticatedService.listNamedGraphs();
+
+      const expectedAuth = `Basic ${Buffer.from('admin:secret').toString('base64')}`;
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: expectedAuth,
+          }),
+        }),
+      );
+    });
+
+    it('should not include Authorization header when credentials are absent', async () => {
+      const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ results: { bindings: [] } }),
+      } as Response);
+
+      await service.listNamedGraphs();
+
+      const headers = (fetchSpy.mock.calls[0][1] as RequestInit)
+        .headers as Record<string, string>;
+      expect(headers).not.toHaveProperty('Authorization');
+    });
+  });
+
   describe('fetchResources', () => {
     const graphUri = 'http://example.org/graph1';
     const subjectUris = [

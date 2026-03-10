@@ -1,18 +1,14 @@
 services:
   fuseki:
-    image: dansknaw/eden-fuseki:latest
-    build:
-      context: ./docker/fuseki
-      args:
-        JENA_VERSION: "6.0.0"
+    image: secoresearch/fuseki:latest
     ports:
       - "3030:3030"
     environment:
       JAVA_OPTIONS: "-Xmx2048m -Xms2048m"
     volumes:
-      - fuseki-data:/fuseki/databases
-      - ./docker/fuseki/config.ttl:/fuseki/config.ttl:ro
-    command: ["--conf", "config.ttl"]
+      - fuseki-data:/fuseki-base/databases
+      - ./docker/fuseki/configuration:/fuseki-base/configuration
+      - ./docker/fuseki/shiro.ini:/fuseki-base/shiro.ini
     healthcheck:
       test:
         ["CMD-SHELL", "wget -q --spider http://localhost:3030/$/ping || exit 1"]
@@ -99,6 +95,8 @@ services:
     env_file: .env
     environment:
       FUSEKI_ENDPOINT: http://fuseki:3030/eden
+      FUSEKI_USERNAME: ${FUSEKI_USERNAME:-admin}
+      FUSEKI_PASSWORD: ${FUSEKI_PASSWORD:-admin}
       RDF_DELTA_URL: http://rdf-delta:1066
       ELASTICSEARCH_URL: http://elasticsearch:9200
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/eden_exporter
@@ -120,6 +118,23 @@ services:
       timeout: 5s
       start_period: 30s
       retries: 3
+    restart: unless-stopped
+
+  harvester:
+    image: dansknaw/eden-harvester:latest
+    build:
+      context: ../wp2-repo-harvester
+    ports:
+      - "8080:8080"
+    environment:
+      FUSEKI_PATH: http://fuseki:3030/eden/data
+      FUSEKI_USERNAME: ${FUSEKI_USERNAME:-admin}
+      FUSEKI_PASSWORD: ${FUSEKI_PASSWORD:-admin}
+      FAIRSHARING_USERNAME: ${FAIRSHARING_USERNAME:-}
+      FAIRSHARING_PASSWORD: ${FAIRSHARING_PASSWORD:-}
+    depends_on:
+      fuseki:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

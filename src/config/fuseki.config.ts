@@ -16,6 +16,16 @@ export const FusekiConfigSchema = z.object({
    * The RDF Delta datasource name to monitor.
    */
   RDF_DELTA_DATASOURCE: z.string().min(1),
+
+  /**
+   * The username for Fuseki HTTP Basic Auth.
+   */
+  FUSEKI_USERNAME: z.string().optional(),
+
+  /**
+   * The password for Fuseki HTTP Basic Auth.
+   */
+  FUSEKI_PASSWORD: z.string().optional(),
 });
 
 export const FUSEKI_CONFIG_KEY = Symbol('app:config:fuseki');
@@ -29,5 +39,7 @@ export default registerAs(
       FUSEKI_ENDPOINT: process.env.FUSEKI_ENDPOINT,
       RDF_DELTA_URL: process.env.RDF_DELTA_URL,
       RDF_DELTA_DATASOURCE: process.env.RDF_DELTA_DATASOURCE,
+      FUSEKI_USERNAME: process.env.FUSEKI_USERNAME,
+      FUSEKI_PASSWORD: process.env.FUSEKI_PASSWORD,
     }),
 );

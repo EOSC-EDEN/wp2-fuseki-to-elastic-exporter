@@ -5,11 +5,21 @@ import { FUSEKI_CONFIG_KEY, type FusekiConfig } from '../config';
 @Injectable()
 export class FusekiService {
   private readonly endpoint: string;
+  private readonly authHeaders: Record<string, string>;
 
   constructor(private readonly configService: ConfigService) {
     const fusekiConfig =
       this.configService.get<FusekiConfig>(FUSEKI_CONFIG_KEY);
     this.endpoint = fusekiConfig!.FUSEKI_ENDPOINT;
+
+    if (fusekiConfig!.FUSEKI_USERNAME) {
+      const credentials = Buffer.from(
+        `${fusekiConfig!.FUSEKI_USERNAME}:${fusekiConfig!.FUSEKI_PASSWORD ?? ''}`,
+      ).toString('base64');
+      this.authHeaders = { Authorization: `Basic ${credentials}` };
+    } else {
+      this.authHeaders = {};
+    }
   }
 
   async listNamedGraphs(): Promise<string[]> {
@@ -17,7 +27,10 @@ export class FusekiService {
     const url = `${this.endpoint}/sparql?query=${encodeURIComponent(query)}`;
 
     const response = await fetch(url, {
-      headers: { Accept: 'application/sparql-results+json' },
+      headers: {
+        Accept: 'application/sparql-results+json',
+        ...this.authHeaders,
+      },
     });
 
     if (!response.ok) {
@@ -39,7 +52,7 @@ export class FusekiService {
     const url = `${this.endpoint}/data?graph=${encodeURIComponent(graphUri)}`;
 
     const response = await fetch(url, {
-      headers: { Accept: 'application/ld+json' },
+      headers: { Accept: 'application/ld+json', ...this.authHeaders },
     });
 
     if (!response.ok) {
@@ -75,7 +88,7 @@ export class FusekiService {
 
     const url = `${this.endpoint}/sparql?query=${encodeURIComponent(query)}`;
     const response = await fetch(url, {
-      headers: { Accept: 'application/ld+json' },
+      headers: { Accept: 'application/ld+json', ...this.authHeaders },
     });
 
     if (!response.ok) {
