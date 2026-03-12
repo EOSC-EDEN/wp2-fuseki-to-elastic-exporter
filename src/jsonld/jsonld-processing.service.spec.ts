@@ -1,10 +1,11 @@
 import { JsonldProcessingService } from './jsonld-processing.service';
+import { LabelEnrichmentService } from './label-enrichment.service';
 
 describe('JsonldProcessingService', () => {
   let service: JsonldProcessingService;
 
   beforeEach(() => {
-    service = new JsonldProcessingService();
+    service = new JsonldProcessingService(new LabelEnrichmentService());
   });
 
   describe('flatten', () => {
@@ -406,6 +407,83 @@ describe('JsonldProcessingService', () => {
 
       expect(result[0]['_referencedBy']).toBeUndefined();
       expect(result[1]['_referencedBy']).toBeUndefined();
+    });
+
+    it('should add _policy field with resolved policy titles', async () => {
+      const document = {
+        '@context': {
+          dct: 'http://purl.org/dc/terms/',
+          dcat: 'http://www.w3.org/ns/dcat#',
+        },
+        '@graph': [
+          {
+            '@id': 'http://example.org/catalog',
+            '@type': 'dcat:Catalog',
+            'dct:conformsTo': { '@id': 'http://example.org/policy' },
+          },
+          {
+            '@id': 'http://example.org/policy',
+            '@type': 'dct:Policy',
+            'dct:title': 'My Access Policy',
+          },
+        ],
+      };
+
+      const result = await service.flatten(document);
+
+      const catalog = result.find(
+        (n) => n['@id'] === 'http://example.org/catalog',
+      );
+      expect(catalog!['_policy']).toBe('My Access Policy');
+      expect(catalog!['dct:conformsTo']).toBe('http://example.org/policy');
+    });
+
+    it('should not add _policy when conformsTo points to non-policy documents', async () => {
+      const document = {
+        '@context': {
+          dct: 'http://purl.org/dc/terms/',
+          dcat: 'http://www.w3.org/ns/dcat#',
+        },
+        '@id': 'http://example.org/service',
+        '@type': 'dcat:DataService',
+        'dct:conformsTo': 'http://www.openarchives.org/OAI/2.0/',
+      };
+
+      const result = await service.flatten(document);
+
+      expect(result[0]['dct:conformsTo']).toBe(
+        'http://www.openarchives.org/OAI/2.0/',
+      );
+      expect(result[0]['_policy']).toBeUndefined();
+    });
+
+    it('should add rdfs:label to policy nodes during flattening', async () => {
+      const document = {
+        '@context': {
+          dct: 'http://purl.org/dc/terms/',
+          dcat: 'http://www.w3.org/ns/dcat#',
+        },
+        '@graph': [
+          {
+            '@id': 'http://example.org/catalog',
+            '@type': 'dcat:Catalog',
+            'dct:conformsTo': { '@id': 'http://example.org/policy' },
+          },
+          {
+            '@id': 'http://example.org/policy',
+            '@type': 'dct:Policy',
+            'dct:title': 'Some Policy',
+          },
+        ],
+      };
+
+      const result = await service.flatten(document);
+
+      const policy = result.find(
+        (n) => n['@id'] === 'http://example.org/policy',
+      );
+      expect(policy!['rdfs:label']).toBe('Some Policy');
+      expect(policy!['dct:title']).toBe('Some Policy');
     });
   });
 });

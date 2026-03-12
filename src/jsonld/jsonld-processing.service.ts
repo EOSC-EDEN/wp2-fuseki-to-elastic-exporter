@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import * as jsonld from 'jsonld';
 import type { ContextDefinition, JsonLdDocument } from 'jsonld';
+import { LabelEnrichmentService } from './label-enrichment.service';
 
 type JsonLdNode = Record<string, unknown>;
 
@@ -11,6 +12,7 @@ interface FlattenedDocument {
 
 @Injectable()
 export class JsonldProcessingService {
+  constructor(private readonly labelEnrichment: LabelEnrichmentService) {}
   // W3C JSON-LD flatten returns different shapes depending on whether a context
   // is provided: an array of expanded nodes (no context) or an object with
   // @graph containing compacted nodes (with context). Both cases are handled.
@@ -30,7 +32,11 @@ export class JsonldProcessingService {
         ((flattened as FlattenedDocument)['@graph'] as JsonLdNode[]) ?? [];
     }
 
-    return this.addBackReferences(this.embedBlankNodes(nodes));
+    return this.addPolicyLabels(
+      this.labelEnrichment.enrichLabels(
+        this.addBackReferences(this.embedBlankNodes(nodes)),
+      ),
+    );
   }
 
   // After flattening, URI references are collapsed to plain strings. Scan each
@@ -78,6 +84,51 @@ export class JsonldProcessingService {
         this.collectUriReferences(v, docIds, parentId, backRefs);
       }
     }
+  }
+
+  // Build a synthetic _policy field on documents that reference Policy-type
+  // nodes via dct:conformsTo. The field contains the human-readable dct:title
+  // of each referenced policy, omitting unresolvable URIs (e.g. protocol specs).
+  private addPolicyLabels(nodes: JsonLdNode[]): JsonLdNode[] {
+    const policyTypes = new Set([
+      'dct:Policy',
+      'http://purl.org/dc/terms/Policy',
+    ]);
+
+    const policyTitleMap = new Map<string, string>();
+    for (const node of nodes) {
+      const types = this.getNodeTypes(node);
+      if (!types.some((t) => policyTypes.has(t))) continue;
+      const id = node['@id'] as string;
+      const title = node['dct:title'];
+      if (id && typeof title === 'string') {
+        policyTitleMap.set(id, title);
+      }
+    }
+
+    return nodes.map((node) => {
+      const conformsTo = node['dct:conformsTo'];
+      if (!conformsTo) return node;
+
+      const values = Array.isArray(conformsTo) ? conformsTo : [conformsTo];
+      const labels = values
+        .filter(
+          (val): val is string =>
+            typeof val === 'string' && policyTitleMap.has(val),
+        )
+        .map((val) => policyTitleMap.get(val)!);
+
+      if (labels.length === 0) return node;
+      return { ...node, _policy: labels.length === 1 ? labels[0] : labels };
+    });
+  }
+
+  private getNodeTypes(node: JsonLdNode): string[] {
+    const type = node['@type'];
+    if (Array.isArray(type))
+      return type.filter((t): t is string => typeof t === 'string');
+    if (typeof type === 'string') return [type];
+    return [];
   }
 
   // Partition nodes into URI nodes (real entities) and blank nodes (anonymous),
