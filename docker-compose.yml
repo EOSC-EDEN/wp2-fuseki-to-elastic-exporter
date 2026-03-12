@@ -25,6 +25,9 @@ services:
       discovery.type: single-node
       bootstrap.memory_lock: "true"
       xpack.security.enabled: "false"
+      http.cors.enabled: "true"
+      http.cors.allow-origin: "/https?:\\/\\/localhost(:[0-9]+)?/"
+      http.cors.allow-headers: "X-Requested-With,Content-Type,Content-Length,Authorization,x-elastic-client-meta"
       ES_JAVA_OPTS: "-Xms512m -Xmx512m"
     ulimits:
       memlock:

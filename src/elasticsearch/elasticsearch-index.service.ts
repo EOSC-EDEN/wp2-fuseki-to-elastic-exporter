@@ -95,20 +95,20 @@ export class ElasticsearchIndexService {
 
     if (response.errors) {
       const errorItems = response.items.filter((item) => item.index?.error);
-      this.logger.error(
-        `Bulk indexing encountered ${errorItems.length} errors`,
+      this.logger.warn(
+        `Bulk indexing encountered ${errorItems.length} errors (${documents.length - errorItems.length} succeeded)`,
       );
       for (const item of errorItems) {
-        this.logger.error(
+        this.logger.warn(
           `Failed to index document ${item.index?._id}: ${JSON.stringify(item.index?.error)}`,
         );
       }
-      throw new Error(`Bulk indexing failed with ${errorItems.length} errors`);
     }
 
-    this.logger.log(
-      `Indexed ${documents.length} documents into "${indexName}"`,
-    );
+    const successCount = response.items.filter(
+      (item) => !item.index?.error,
+    ).length;
+    this.logger.log(`Indexed ${successCount} documents into "${indexName}"`);
   }
 
   async bulkDelete(indexName: string, documentIds: string[]): Promise<void> {
