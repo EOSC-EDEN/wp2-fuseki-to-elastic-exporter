@@ -2,7 +2,9 @@ import { registerAs } from '@nestjs/config';
 import z from 'zod';
 
 export const ElasticsearchConfigSchema = z.object({
-  ELASTICSEARCH_URL: z.url(),
+  ELASTICSEARCH_URL: z
+    .url()
+    .transform((url) => url.replace(/\/+$/, '')),
   ELASTICSEARCH_ALIAS: z.string().min(1),
   ELASTICSEARCH_USERNAME: z.string().optional(),
   ELASTICSEARCH_PASSWORD: z.string().optional(),

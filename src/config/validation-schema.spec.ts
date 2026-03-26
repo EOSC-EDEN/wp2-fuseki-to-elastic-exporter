@@ -350,6 +350,16 @@ describe('Configuration Validation Schemas', () => {
         );
       });
 
+      it('should strip trailing slashes from the URL', () => {
+        env.ELASTICSEARCH_URL = 'http://elasticsearch.example.com:9200/';
+
+        const result = EnvironmentConfigSchema.parse(env);
+
+        expect(result.ELASTICSEARCH_URL).toBe(
+          'http://elasticsearch.example.com:9200',
+        );
+      });
+
       it('should reject when missing', () => {
         const partial: Partial<EnvironmentConfigInput> = { ...env };
         delete partial.ELASTICSEARCH_URL;
