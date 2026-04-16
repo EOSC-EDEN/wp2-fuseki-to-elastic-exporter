@@ -29,7 +29,6 @@ describe('SyncStateService', () => {
     it('should upsert the singleton and return it', async () => {
       const mockState = {
         id: 'singleton',
-        lastPatchVersion: 42,
         lastSyncedAt: new Date(),
         activeIndexName: 'eden-123',
       };
@@ -48,31 +47,15 @@ describe('SyncStateService', () => {
     });
   });
 
-  describe('updateLastPatchVersion', () => {
-    it('should update the singleton with the new version', async () => {
-      (prismaService.syncState.update as jest.Mock).mockResolvedValueOnce({});
-
-      await service.updateLastPatchVersion(99);
-
-      expect(prismaService.syncState.update).toHaveBeenCalledWith({
-        where: { id: 'singleton' },
-        data: { lastPatchVersion: 99 },
-      });
-    });
-  });
-
   describe('updateActiveIndex', () => {
-    it('should update both activeIndexName and lastPatchVersion', async () => {
+    it('should update the activeIndexName', async () => {
       (prismaService.syncState.update as jest.Mock).mockResolvedValueOnce({});
 
-      await service.updateActiveIndex('eden-1700000000', 50);
+      await service.updateActiveIndex('eden-1700000000');
 
       expect(prismaService.syncState.update).toHaveBeenCalledWith({
         where: { id: 'singleton' },
-        data: {
-          activeIndexName: 'eden-1700000000',
-          lastPatchVersion: 50,
-        },
+        data: { activeIndexName: 'eden-1700000000' },
       });
     });
   });

@@ -6,7 +6,6 @@ import { JsonldProcessingService } from '../jsonld/jsonld-processing.service';
 import { ElasticsearchIndexService } from '../elasticsearch/elasticsearch-index.service';
 import { GraphRegistryService } from '../graph-sync/graph-registry.service';
 import { SyncStateService } from '../graph-sync/sync-state.service';
-import { RdfDeltaClientService } from '../rdf-delta/rdf-delta-client.service';
 import { ELASTICSEARCH_CONFIG_KEY } from '../config';
 
 describe('ReindexService', () => {
@@ -16,7 +15,6 @@ describe('ReindexService', () => {
   let esIndexService: ElasticsearchIndexService;
   let graphRegistryService: GraphRegistryService;
   let syncStateService: SyncStateService;
-  let deltaClient: RdfDeltaClientService;
 
   const esAlias = 'eden-test';
 
@@ -56,10 +54,6 @@ describe('ReindexService', () => {
         get: jest.fn(),
         updateActiveIndex: jest.fn(),
       }))
-      .mock(RdfDeltaClientService)
-      .impl(() => ({
-        describeLog: jest.fn(),
-      }))
       .compile();
 
     service = unit;
@@ -76,9 +70,6 @@ describe('ReindexService', () => {
     syncStateService = unitRef.get(
       SyncStateService,
     ) as unknown as SyncStateService;
-    deltaClient = unitRef.get(
-      RdfDeltaClientService,
-    ) as unknown as RdfDeltaClientService;
   });
 
   it('should be defined', () => {
@@ -94,21 +85,16 @@ describe('ReindexService', () => {
     it('should perform full reindex with blue-green swap', async () => {
       (syncStateService.get as jest.Mock).mockResolvedValue({
         id: 'singleton',
-        lastPatchVersion: 5,
         activeIndexName: 'eden-test-old',
       });
       (fusekiService.listNamedGraphs as jest.Mock).mockResolvedValue([
-        'http://example.org/graph/1',
+        'eden://harvester/harmonized/https://example.org/',
       ]);
       (fusekiService.fetchGraph as jest.Mock).mockResolvedValue({
         '@context': {},
         '@graph': [],
       });
       (jsonldService.flatten as jest.Mock).mockResolvedValue(flattenedDocs);
-      (deltaClient.describeLog as jest.Mock).mockResolvedValue({
-        minVersion: 1,
-        maxVersion: 10,
-      });
 
       await service.reindexAll();
 
@@ -117,7 +103,7 @@ describe('ReindexService', () => {
       );
       expect(graphRegistryService.deleteAll).toHaveBeenCalled();
       expect(fusekiService.fetchGraph).toHaveBeenCalledWith(
-        'http://example.org/graph/1',
+        'eden://harvester/harmonized/https://example.org/',
       );
       expect(jsonldService.flatten).toHaveBeenCalled();
       expect(esIndexService.bulkIndex).toHaveBeenCalledWith(
@@ -125,7 +111,7 @@ describe('ReindexService', () => {
         flattenedDocs,
       );
       expect(graphRegistryService.upsert).toHaveBeenCalledWith(
-        'http://example.org/graph/1',
+        'eden://harvester/harmonized/https://example.org/',
         ['http://example.org/doc/1', 'http://example.org/doc/2'],
       );
       expect(esIndexService.swapAlias).toHaveBeenCalledWith(
@@ -134,51 +120,40 @@ describe('ReindexService', () => {
       );
       expect(syncStateService.updateActiveIndex).toHaveBeenCalledWith(
         expect.stringMatching(/^eden-test-\d+$/),
-        10,
       );
       expect(esIndexService.deleteIndex).toHaveBeenCalledWith('eden-test-old');
     });
 
-    it('should handle empty graph list', async () => {
+    it('should only index harmonized graphs', async () => {
       (syncStateService.get as jest.Mock).mockResolvedValue({
         id: 'singleton',
-        lastPatchVersion: 0,
         activeIndexName: null,
       });
-      (fusekiService.listNamedGraphs as jest.Mock).mockResolvedValue([]);
-      (deltaClient.describeLog as jest.Mock).mockResolvedValue({
-        minVersion: 0,
-        maxVersion: 0,
+      (fusekiService.listNamedGraphs as jest.Mock).mockResolvedValue([
+        'eden://harvester/embedded_jsonld/https://example.org/',
+        'eden://harvester/harmonized/https://example.org/',
+        'eden://harvester/re3data/https://example.org/',
+      ]);
+      (fusekiService.fetchGraph as jest.Mock).mockResolvedValue({
+        '@context': {},
+        '@graph': [],
       });
+      (jsonldService.flatten as jest.Mock).mockResolvedValue([]);
 
       await service.reindexAll();
 
-      expect(esIndexService.ensureIndex).toHaveBeenCalled();
-      expect(graphRegistryService.deleteAll).toHaveBeenCalled();
-      expect(fusekiService.fetchGraph).not.toHaveBeenCalled();
-      expect(esIndexService.bulkIndex).not.toHaveBeenCalled();
-      expect(esIndexService.swapAlias).toHaveBeenCalledWith(
-        esAlias,
-        expect.stringMatching(/^eden-test-\d+$/),
+      expect(fusekiService.fetchGraph).toHaveBeenCalledTimes(1);
+      expect(fusekiService.fetchGraph).toHaveBeenCalledWith(
+        'eden://harvester/harmonized/https://example.org/',
       );
-      expect(syncStateService.updateActiveIndex).toHaveBeenCalledWith(
-        expect.stringMatching(/^eden-test-\d+$/),
-        0,
-      );
-      expect(esIndexService.deleteIndex).not.toHaveBeenCalled();
     });
 
     it('should not throw when old index deletion fails', async () => {
       (syncStateService.get as jest.Mock).mockResolvedValue({
         id: 'singleton',
-        lastPatchVersion: 5,
         activeIndexName: 'eden-test-old',
       });
       (fusekiService.listNamedGraphs as jest.Mock).mockResolvedValue([]);
-      (deltaClient.describeLog as jest.Mock).mockResolvedValue({
-        minVersion: 1,
-        maxVersion: 10,
-      });
       (esIndexService.deleteIndex as jest.Mock).mockRejectedValue(
         new Error('index not found'),
       );

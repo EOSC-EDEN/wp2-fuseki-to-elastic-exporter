@@ -8,16 +8,6 @@ export const FusekiConfigSchema = z.object({
   FUSEKI_ENDPOINT: z.url(),
 
   /**
-   * The URL of the RDF Delta Patch Log Server.
-   */
-  RDF_DELTA_URL: z.url(),
-
-  /**
-   * The RDF Delta datasource name to monitor.
-   */
-  RDF_DELTA_DATASOURCE: z.string().min(1),
-
-  /**
    * The username for Fuseki HTTP Basic Auth.
    */
   FUSEKI_USERNAME: z.string().optional(),
@@ -37,8 +27,6 @@ export default registerAs(
   (): FusekiConfig =>
     FusekiConfigSchema.parse({
       FUSEKI_ENDPOINT: process.env.FUSEKI_ENDPOINT,
-      RDF_DELTA_URL: process.env.RDF_DELTA_URL,
-      RDF_DELTA_DATASOURCE: process.env.RDF_DELTA_DATASOURCE,
       FUSEKI_USERNAME: process.env.FUSEKI_USERNAME,
       FUSEKI_PASSWORD: process.env.FUSEKI_PASSWORD,
     }),

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { FusekiService } from '../fuseki/fuseki.service';
 import { JsonldProcessingService } from '../jsonld/jsonld-processing.service';
 import { ElasticsearchIndexService } from '../elasticsearch/elasticsearch-index.service';
@@ -31,7 +32,10 @@ export class GraphSyncService {
     }
 
     await this.esIndexService.bulkIndex(indexName, flattenedDocs);
-    await this.graphRegistryService.upsert(graphUri, newDocIds);
+    const contentHash = createHash('sha256')
+      .update(JSON.stringify(document))
+      .digest('hex');
+    await this.graphRegistryService.upsert(graphUri, newDocIds, contentHash);
 
     this.logger.log(
       `Synced graph "${graphUri}": ${flattenedDocs.length} documents`,

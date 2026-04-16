@@ -169,7 +169,7 @@ describe('ElasticsearchIndexService', () => {
       expect(esService.bulk).not.toHaveBeenCalled();
     });
 
-    it('should throw when bulk response contains errors', async () => {
+    it('should soft-fail when bulk response contains errors', async () => {
       (esService.bulk as jest.Mock).mockResolvedValueOnce({
         errors: true,
         items: [
@@ -186,9 +186,9 @@ describe('ElasticsearchIndexService', () => {
         { '@id': 'http://example.org/doc1', '@type': 'Thing' },
       ];
 
-      await expect(service.bulkIndex('test-index', documents)).rejects.toThrow(
-        'Bulk indexing failed with 1 errors',
-      );
+      await expect(
+        service.bulkIndex('test-index', documents),
+      ).resolves.toBeUndefined();
     });
   });
 

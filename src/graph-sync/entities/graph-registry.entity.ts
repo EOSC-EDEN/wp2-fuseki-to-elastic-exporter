@@ -1,5 +1,12 @@
 import type { GraphRegistryModel } from '../../generated/prisma/models/GraphRegistry';
-import { IsString, IsArray, IsInt, IsDate, IsUUID } from 'class-validator';
+import {
+  IsString,
+  IsArray,
+  IsInt,
+  IsDate,
+  IsUUID,
+  IsOptional,
+} from 'class-validator';
 
 export class GraphRegistry implements GraphRegistryModel {
   @IsUUID()
@@ -7,6 +14,10 @@ export class GraphRegistry implements GraphRegistryModel {
 
   @IsString()
   graphUri: string;
+
+  @IsOptional()
+  @IsString()
+  contentHash: string | null;
 
   @IsArray()
   @IsString({ each: true })

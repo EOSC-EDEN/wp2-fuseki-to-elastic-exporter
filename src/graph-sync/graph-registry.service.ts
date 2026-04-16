@@ -17,6 +17,7 @@ export class GraphRegistryService {
   async upsert(
     graphUri: string,
     documentIds: string[],
+    contentHash?: string,
   ): Promise<GraphRegistry> {
     return this.prismaService.graphRegistry.upsert({
       where: { graphUri },
@@ -24,10 +25,12 @@ export class GraphRegistryService {
         graphUri,
         documentIds,
         documentCount: documentIds.length,
+        ...(contentHash && { contentHash }),
       },
       update: {
         documentIds,
         documentCount: documentIds.length,
+        ...(contentHash && { contentHash }),
       },
     });
   }

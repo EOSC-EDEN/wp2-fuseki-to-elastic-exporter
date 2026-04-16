@@ -4,7 +4,6 @@ import { FusekiModule } from '../fuseki/fuseki.module';
 import { JsonldModule } from '../jsonld/jsonld.module';
 import { ElasticsearchIndexModule } from '../elasticsearch/elasticsearch-index.module';
 import { GraphSyncModule } from '../graph-sync/graph-sync.module';
-import { RdfDeltaModule } from '../rdf-delta/rdf-delta.module';
 import { ReindexService } from './reindex.service';
 
 @Module({
@@ -14,7 +13,6 @@ import { ReindexService } from './reindex.service';
     JsonldModule,
     ElasticsearchIndexModule,
     GraphSyncModule,
-    RdfDeltaModule,
   ],
   providers: [ReindexService],
   exports: [ReindexService],

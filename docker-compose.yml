@@ -1,8 +1,6 @@
 services:
-  fuseki:
+  fuseki-backend:
     image: secoresearch/fuseki:latest
-    ports:
-      - "3030:3030"
     environment:
       JAVA_OPTIONS: "-Xmx2048m -Xms2048m"
     volumes:
@@ -15,6 +13,24 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
+
+  fuseki:
+    build:
+      context: ./docker/fuseki-proxy
+    ports:
+      - "3030:3030"
+    environment:
+      FUSEKI_BACKEND_HOST: fuseki-backend
+      FUSEKI_BACKEND_PORT: "3030"
+      PROXY_PORT: "3030"
+      REDIS_URL: redis://redis:6379
+      REDIS_CHANNEL: fuseki:graph-changed
+    depends_on:
+      fuseki-backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
   elasticsearch:
@@ -73,23 +89,6 @@ services:
       retries: 5
     restart: unless-stopped
 
-  rdf-delta:
-    image: conjecto/rdf-delta:latest
-    ports:
-      - "1066:1066"
-    volumes:
-      - rdf-delta-data:/var/lib/rdf-delta
-    depends_on:
-      fuseki:
-        condition: service_healthy
-    healthcheck:
-      test:
-        ["CMD-SHELL", "wget -q -O /dev/null http://localhost:1066/ || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-
   app:
     image: dansknaw/eden-exporter:latest
     build: .
@@ -100,20 +99,17 @@ services:
       FUSEKI_ENDPOINT: http://fuseki:3030/eden
       FUSEKI_USERNAME: ${FUSEKI_USERNAME:-admin}
       FUSEKI_PASSWORD: ${FUSEKI_PASSWORD:-admin}
-      RDF_DELTA_URL: http://rdf-delta:1066
       ELASTICSEARCH_URL: http://elasticsearch:9200
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/eden_exporter
       REDIS_HOST: redis
     depends_on:
       fuseki:
-        condition: service_healthy
+        condition: service_started
       elasticsearch:
         condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      rdf-delta:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3000/api || exit 1"]
@@ -124,9 +120,7 @@ services:
     restart: unless-stopped
 
   harvester:
-    image: dansknaw/eden-harvester:latest
-    build:
-      context: ../wp2-repo-harvester
+    image: dansknaw/eden-harvester:0.0.1
     ports:
       - "8080:8080"
     environment:
@@ -137,7 +131,7 @@ services:
       FAIRSHARING_PASSWORD: ${FAIRSHARING_PASSWORD:-}
     depends_on:
       fuseki:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
 
 volumes:
@@ -145,4 +139,3 @@ volumes:
   elasticsearch-data:
   postgres-data:
   redis-data:
-  rdf-delta-data:

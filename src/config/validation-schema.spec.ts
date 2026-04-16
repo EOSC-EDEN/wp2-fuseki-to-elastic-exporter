@@ -12,8 +12,6 @@ describe('Configuration Validation Schemas', () => {
       API_PORT: 3000,
       API_PREFIX: 'api',
       FUSEKI_ENDPOINT: 'http://localhost:3030/ds',
-      RDF_DELTA_URL: 'http://localhost:1066',
-      RDF_DELTA_DATASOURCE: 'eden',
       ELASTICSEARCH_URL: 'http://localhost:9200',
       ELASTICSEARCH_ALIAS: 'eden',
       AUTH_API_TOKEN: 'a'.repeat(32),
@@ -190,62 +188,6 @@ describe('Configuration Validation Schemas', () => {
         const result = EnvironmentConfigSchema.safeParse({
           ...env,
           FUSEKI_ENDPOINT: '',
-        });
-
-        expect(result.success).toBe(false);
-      });
-    });
-
-    describe('RDF_DELTA_URL', () => {
-      it('should accept a valid URL', () => {
-        env.RDF_DELTA_URL = 'http://localhost:1066';
-
-        const result = EnvironmentConfigSchema.parse(env);
-
-        expect(result.RDF_DELTA_URL).toBe('http://localhost:1066');
-      });
-
-      it('should reject when missing', () => {
-        const partial: Partial<EnvironmentConfigInput> = { ...env };
-        delete partial.RDF_DELTA_URL;
-
-        const result = EnvironmentConfigSchema.safeParse(partial);
-
-        expect(result.success).toBe(false);
-      });
-
-      it('should reject an invalid URL', () => {
-        const result = EnvironmentConfigSchema.safeParse({
-          ...env,
-          RDF_DELTA_URL: 'not-a-url',
-        });
-
-        expect(result.success).toBe(false);
-      });
-    });
-
-    describe('RDF_DELTA_DATASOURCE', () => {
-      it('should accept a valid string', () => {
-        env.RDF_DELTA_DATASOURCE = 'eden';
-
-        const result = EnvironmentConfigSchema.parse(env);
-
-        expect(result.RDF_DELTA_DATASOURCE).toBe('eden');
-      });
-
-      it('should reject when missing', () => {
-        const partial: Partial<EnvironmentConfigInput> = { ...env };
-        delete partial.RDF_DELTA_DATASOURCE;
-
-        const result = EnvironmentConfigSchema.safeParse(partial);
-
-        expect(result.success).toBe(false);
-      });
-
-      it('should reject an empty string', () => {
-        const result = EnvironmentConfigSchema.safeParse({
-          ...env,
-          RDF_DELTA_DATASOURCE: '',
         });
 
         expect(result.success).toBe(false);

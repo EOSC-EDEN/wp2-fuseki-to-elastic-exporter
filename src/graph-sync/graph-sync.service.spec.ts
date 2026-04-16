@@ -87,10 +87,11 @@ describe('GraphSyncService', () => {
         indexName,
         flattenedDocs,
       );
-      expect(graphRegistryService.upsert).toHaveBeenCalledWith(graphUri, [
-        'http://example.org/doc/1',
-        'http://example.org/doc/2',
-      ]);
+      expect(graphRegistryService.upsert).toHaveBeenCalledWith(
+        graphUri,
+        ['http://example.org/doc/1', 'http://example.org/doc/2'],
+        expect.any(String),
+      );
     });
 
     it('should delete removed documents when graph content changes', async () => {
@@ -124,10 +125,11 @@ describe('GraphSyncService', () => {
         indexName,
         flattenedDocs,
       );
-      expect(graphRegistryService.upsert).toHaveBeenCalledWith(graphUri, [
-        'http://example.org/doc/1',
-        'http://example.org/doc/2',
-      ]);
+      expect(graphRegistryService.upsert).toHaveBeenCalledWith(
+        graphUri,
+        ['http://example.org/doc/1', 'http://example.org/doc/2'],
+        expect.any(String),
+      );
     });
   });
 

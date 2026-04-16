@@ -5,7 +5,6 @@ import { JsonldProcessingService } from '../jsonld/jsonld-processing.service';
 import { ElasticsearchIndexService } from '../elasticsearch/elasticsearch-index.service';
 import { GraphRegistryService } from '../graph-sync/graph-registry.service';
 import { SyncStateService } from '../graph-sync/sync-state.service';
-import { RdfDeltaClientService } from '../rdf-delta/rdf-delta-client.service';
 import { ELASTICSEARCH_CONFIG_KEY, type ElasticsearchConfig } from '../config';
 
 @Injectable()
@@ -19,7 +18,6 @@ export class ReindexService {
     private readonly esIndexService: ElasticsearchIndexService,
     private readonly graphRegistryService: GraphRegistryService,
     private readonly syncStateService: SyncStateService,
-    private readonly deltaClient: RdfDeltaClientService,
     private readonly configService: ConfigService,
   ) {
     const esConfig = this.configService.get<ElasticsearchConfig>(
@@ -38,8 +36,13 @@ export class ReindexService {
     await this.esIndexService.ensureIndex(newIndexName);
     this.logger.log(`Created new index "${newIndexName}"`);
 
-    const graphUris = await this.fusekiService.listNamedGraphs();
-    this.logger.log(`Found ${graphUris.length} named graphs`);
+    const allGraphUris = await this.fusekiService.listNamedGraphs();
+    const graphUris = allGraphUris.filter((uri) =>
+      uri.includes('/harmonized/'),
+    );
+    this.logger.log(
+      `Found ${allGraphUris.length} named graphs, indexing ${graphUris.length} harmonized`,
+    );
 
     await this.graphRegistryService.deleteAll();
 
@@ -54,9 +57,7 @@ export class ReindexService {
     }
 
     await this.esIndexService.swapAlias(this.alias, newIndexName);
-
-    const { maxVersion } = await this.deltaClient.describeLog();
-    await this.syncStateService.updateActiveIndex(newIndexName, maxVersion);
+    await this.syncStateService.updateActiveIndex(newIndexName);
 
     if (oldIndexName) {
       try {

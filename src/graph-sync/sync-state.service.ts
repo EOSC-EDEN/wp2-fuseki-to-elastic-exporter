@@ -19,23 +19,10 @@ export class SyncStateService {
     });
   }
 
-  async updateLastPatchVersion(version: number): Promise<void> {
+  async updateActiveIndex(indexName: string): Promise<void> {
     await this.prismaService.syncState.update({
       where: { id: SINGLETON_ID },
-      data: { lastPatchVersion: version },
-    });
-  }
-
-  async updateActiveIndex(
-    indexName: string,
-    patchVersion: number,
-  ): Promise<void> {
-    await this.prismaService.syncState.update({
-      where: { id: SINGLETON_ID },
-      data: {
-        activeIndexName: indexName,
-        lastPatchVersion: patchVersion,
-      },
+      data: { activeIndexName: indexName },
     });
   }
 }

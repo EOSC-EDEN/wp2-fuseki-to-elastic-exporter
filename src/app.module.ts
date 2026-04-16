@@ -22,7 +22,6 @@ import { ElasticsearchIndexModule } from './elasticsearch/elasticsearch-index.mo
 import { ExportModule } from './export/export.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { GraphSyncModule } from './graph-sync/graph-sync.module';
-import { RdfDeltaModule } from './rdf-delta/rdf-delta.module';
 import { SyncQueueModule } from './sync-queue/sync-queue.module';
 import { SyncSchedulerModule } from './sync-scheduler/sync-scheduler.module';
 import { ReindexModule } from './reindex/reindex.module';
@@ -68,7 +67,6 @@ import { SearchModule } from './search/search.module';
     ExportModule,
     AuthModule,
     GraphSyncModule,
-    RdfDeltaModule,
     SyncQueueModule,
     SyncSchedulerModule,
     ReindexModule,
