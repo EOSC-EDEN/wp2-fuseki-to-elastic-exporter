@@ -11,6 +11,7 @@ async function bootstrap() {
     configService.getOrThrow<ConfigType<typeof coreConfig>>(CORE_CONFIG_KEY);
 
   app.setGlobalPrefix(config.API_PREFIX);
+  app.enableCors();
   await app.listen(config.API_PORT);
 }
 
