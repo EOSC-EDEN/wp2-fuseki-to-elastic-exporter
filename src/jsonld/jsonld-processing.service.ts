@@ -32,11 +32,181 @@ export class JsonldProcessingService {
         ((flattened as FlattenedDocument)['@graph'] as JsonLdNode[]) ?? [];
     }
 
-    return this.addPolicyLabels(
-      this.labelEnrichment.enrichLabels(
-        this.addBackReferences(this.embedBlankNodes(nodes)),
+    return this.normalizeTypeArrays(
+      this.deriveParent(
+        this.deriveCategory(
+          this.addPolicyLabels(
+            this.labelEnrichment.enrichLabels(
+              this.addBackReferences(this.embedBlankNodes(nodes)),
+            ),
+          ),
+        ),
       ),
     );
+  }
+
+  // A clean relational key for UI facets: `_parent` holds the @id of the
+  // owning repository. Lets a "Parent repository" facet drive drill-down with
+  // a plain term filter, skipping the mixture of bare-IRI and
+  // eden://harvester/... values that _referencedBy carries.
+  //
+  // Two resolution strategies, tried in order:
+  //   1. Direct: a referrer is itself a repository → use its @id.
+  //   2. Indirect via CatalogRecord: the harvester links records to policies
+  //      and services via a dcat:CatalogRecord wrapper; that wrapper's
+  //      foaf:primaryTopic is the canonical repo IRI, so we follow it.
+  //
+  // Runs after deriveCategory so referrer categories are available.
+  private deriveParent(nodes: JsonLdNode[]): JsonLdNode[] {
+    const nodeById = new Map<string, JsonLdNode>(
+      nodes.map((n) => [n['@id'] as string, n]),
+    );
+
+    const CATALOG_RECORD_TYPES = new Set([
+      'dcat:CatalogRecord',
+      'http://www.w3.org/ns/dcat#CatalogRecord',
+    ]);
+
+    const hasCatalogRecordType = (referrer: JsonLdNode): boolean => {
+      const t = referrer['@type'];
+      if (Array.isArray(t)) {
+        return t.some(
+          (v) => typeof v === 'string' && CATALOG_RECORD_TYPES.has(v),
+        );
+      }
+      return typeof t === 'string' && CATALOG_RECORD_TYPES.has(t);
+    };
+
+    return nodes.map((node) => {
+      const refs = node['_referencedBy'];
+      if (!Array.isArray(refs)) return node;
+      const selfId = node['@id'] as string | undefined;
+      const setParent = (value: string) =>
+        value === selfId ? node : { ...node, _parent: value };
+
+      // Priority 1: a referrer that is itself a repository
+      for (const ref of refs) {
+        if (typeof ref !== 'string') continue;
+        const referrer = nodeById.get(ref);
+        const cats = referrer?.['_category'];
+        if (Array.isArray(cats) && cats.includes('repository')) {
+          if (ref !== selfId) return { ...node, _parent: ref };
+        }
+      }
+
+      // Priority 2: referrer is a CatalogRecord → follow its foaf:primaryTopic
+      // when it's a real URI string (i.e., not a blank node that got embedded).
+      for (const ref of refs) {
+        if (typeof ref !== 'string') continue;
+        const referrer = nodeById.get(ref);
+        if (!referrer || !hasCatalogRecordType(referrer)) continue;
+        const primaryTopic = referrer['foaf:primaryTopic'];
+        if (typeof primaryTopic === 'string' && primaryTopic !== selfId) {
+          return setParent(primaryTopic);
+        }
+      }
+
+      // Priority 3: extract the repo IRI from the harvester URI scheme
+      // `eden://harvester/<source>/<repo-IRI>`. Works even when
+      // foaf:primaryTopic is a blank node (post-embed). Skip when the
+      // extracted IRI is this node's own @id (repos referenced by their
+      // own CatalogRecord wrappers).
+      const HARVESTER_URI = /^eden:\/\/harvester\/[^/]+\/(.+)$/;
+      for (const ref of refs) {
+        if (typeof ref !== 'string') continue;
+        const m = ref.match(HARVESTER_URI);
+        if (m && m[1] !== selfId) {
+          return { ...node, _parent: m[1] };
+        }
+      }
+
+      return node;
+    });
+  }
+
+  // Faceted search needs a stable, canonical category keyword on every doc.
+  // Rules are @type-driven (the only reliable signal the harvester emits),
+  // with dct:type as a refinement on primary-topic nodes whose @type is
+  // uniformly ['dcat:Catalog','foaf:Project'] regardless of whether the
+  // underlying thing is a repository, standard, or policy.
+  //
+  // Always an array to keep dynamic ES mapping stable across docs.
+  private deriveCategory(nodes: JsonLdNode[]): JsonLdNode[] {
+    return nodes.map((node) => ({
+      ...node,
+      _category: this.categoryFor(node),
+    }));
+  }
+
+  private categoryFor(node: JsonLdNode): string[] {
+    const types = new Set(this.getNodeTypes(node));
+    const has = (...candidates: string[]) =>
+      candidates.some((c) => types.has(c));
+
+    if (has('dcat:DataService', 'http://www.w3.org/ns/dcat#DataService')) {
+      return ['data-service'];
+    }
+    if (has('dct:Policy', 'http://purl.org/dc/terms/Policy')) {
+      return ['policy'];
+    }
+    if (has('dct:Standard', 'http://purl.org/dc/terms/Standard')) {
+      return ['standard'];
+    }
+    if (
+      has(
+        'dcat:CatalogRecord',
+        'http://www.w3.org/ns/dcat#CatalogRecord',
+        'prov:Activity',
+        'http://www.w3.org/ns/prov#Activity',
+        'prov:SoftwareAgent',
+        'http://www.w3.org/ns/prov#SoftwareAgent',
+        'prov:Entity',
+        'http://www.w3.org/ns/prov#Entity',
+      )
+    ) {
+      return ['_internal'];
+    }
+    if (
+      has(
+        'dcat:Catalog',
+        'http://www.w3.org/ns/dcat#Catalog',
+        'foaf:Project',
+        'http://xmlns.com/foaf/0.1/Project',
+      )
+    ) {
+      const refined = this.refineByDctType(node);
+      return [refined ?? 'repository'];
+    }
+    return ['other'];
+  }
+
+  // Primary-topic @type is uniform (dcat:Catalog + foaf:Project); the real
+  // distinction lives in dct:type. FAIRsharing records use fairsharing:standard,
+  // fairsharing:policy, fairsharing:repository; re3data uses r3d:Repository;
+  // embedded JSON-LD carries DataCatalog/schema types. Substring-match is
+  // intentional — the vocab is uncontrolled.
+  private refineByDctType(node: JsonLdNode): string | null {
+    const dctType = node['dct:type'];
+    const values = Array.isArray(dctType) ? dctType : [dctType];
+    for (const v of values) {
+      if (typeof v !== 'string') continue;
+      if (/standard/i.test(v)) return 'standard';
+      if (/polic/i.test(v)) return 'policy';
+    }
+    return null;
+  }
+
+  // Top-level @type is promoted to a string[] so dynamic ES mapping
+  // cannot flip between scalar and array across docs. Embedded blank-node
+  // @types are left as-is (they are not separately indexed).
+  private normalizeTypeArrays(nodes: JsonLdNode[]): JsonLdNode[] {
+    return nodes.map((node) => {
+      const type = node['@type'];
+      if (typeof type === 'string') {
+        return { ...node, '@type': [type] };
+      }
+      return node;
+    });
   }
 
   // After flattening, URI references are collapsed to plain strings. Scan each
@@ -119,7 +289,9 @@ export class JsonldProcessingService {
         .map((val) => policyTitleMap.get(val)!);
 
       if (labels.length === 0) return node;
-      return { ...node, _policy: labels.length === 1 ? labels[0] : labels };
+      // Always an array: scalar↔array drift in dynamic mapping silently
+      // drops subsequent docs on mapper_parsing_exception.
+      return { ...node, _policy: labels };
     });
   }
 

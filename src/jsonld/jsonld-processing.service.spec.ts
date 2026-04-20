@@ -24,7 +24,7 @@ describe('JsonldProcessingService', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0]['@id']).toBe('http://example.org/resource1');
-      expect(result[0]['@type']).toBe('dcat:CatalogRecord');
+      expect(result[0]['@type']).toEqual(['dcat:CatalogRecord']);
     });
 
     it('should embed blank nodes into parent documents', async () => {
@@ -434,7 +434,7 @@ describe('JsonldProcessingService', () => {
       const catalog = result.find(
         (n) => n['@id'] === 'http://example.org/catalog',
       );
-      expect(catalog!['_policy']).toBe('My Access Policy');
+      expect(catalog!['_policy']).toEqual(['My Access Policy']);
       expect(catalog!['dct:conformsTo']).toBe('http://example.org/policy');
     });
 
@@ -484,6 +484,285 @@ describe('JsonldProcessingService', () => {
       );
       expect(policy!['rdfs:label']).toBe('Some Policy');
       expect(policy!['dct:title']).toBe('Some Policy');
+    });
+  });
+
+  describe('_category derivation', () => {
+    it('tags dcat:DataService as data-service', async () => {
+      const result = await service.flatten({
+        '@context': { dcat: 'http://www.w3.org/ns/dcat#' },
+        '@id': 'http://example.org/svc',
+        '@type': 'dcat:DataService',
+      });
+      expect(result[0]['_category']).toEqual(['data-service']);
+    });
+
+    it('tags dct:Policy as policy', async () => {
+      const result = await service.flatten({
+        '@context': { dct: 'http://purl.org/dc/terms/' },
+        '@id': 'http://example.org/p',
+        '@type': 'dct:Policy',
+      });
+      expect(result[0]['_category']).toEqual(['policy']);
+    });
+
+    it('tags dct:Standard as standard', async () => {
+      const result = await service.flatten({
+        '@context': { dct: 'http://purl.org/dc/terms/' },
+        '@id': 'http://example.org/s',
+        '@type': 'dct:Standard',
+      });
+      expect(result[0]['_category']).toEqual(['standard']);
+    });
+
+    it('tags dcat:CatalogRecord as _internal', async () => {
+      const result = await service.flatten({
+        '@context': { dcat: 'http://www.w3.org/ns/dcat#' },
+        '@id': 'http://example.org/rec',
+        '@type': 'dcat:CatalogRecord',
+      });
+      expect(result[0]['_category']).toEqual(['_internal']);
+    });
+
+    it('tags prov:Activity as _internal', async () => {
+      const result = await service.flatten({
+        '@context': { prov: 'http://www.w3.org/ns/prov#' },
+        '@id': 'http://example.org/act',
+        '@type': 'prov:Activity',
+      });
+      expect(result[0]['_category']).toEqual(['_internal']);
+    });
+
+    it('tags primary-topic (dcat:Catalog + foaf:Project) as repository', async () => {
+      const result = await service.flatten({
+        '@context': {
+          dcat: 'http://www.w3.org/ns/dcat#',
+          foaf: 'http://xmlns.com/foaf/0.1/',
+        },
+        '@id': 'http://example.org/repo',
+        '@type': ['dcat:Catalog', 'foaf:Project'],
+      });
+      expect(result[0]['_category']).toEqual(['repository']);
+    });
+
+    it('refines primary-topic to standard when dct:type says so', async () => {
+      const result = await service.flatten({
+        '@context': {
+          dcat: 'http://www.w3.org/ns/dcat#',
+          dct: 'http://purl.org/dc/terms/',
+          foaf: 'http://xmlns.com/foaf/0.1/',
+        },
+        '@id': 'http://example.org/std',
+        '@type': ['dcat:Catalog', 'foaf:Project'],
+        'dct:type': 'fairsharing:standard',
+      });
+      expect(result[0]['_category']).toEqual(['standard']);
+    });
+
+    it('refines primary-topic to policy when dct:type says so', async () => {
+      const result = await service.flatten({
+        '@context': {
+          dcat: 'http://www.w3.org/ns/dcat#',
+          dct: 'http://purl.org/dc/terms/',
+          foaf: 'http://xmlns.com/foaf/0.1/',
+        },
+        '@id': 'http://example.org/pol',
+        '@type': ['dcat:Catalog', 'foaf:Project'],
+        'dct:type': ['fairsharing:policy', 'something-else'],
+      });
+      expect(result[0]['_category']).toEqual(['policy']);
+    });
+
+    it('falls back to other when no rule matches', async () => {
+      const result = await service.flatten({
+        '@context': { ex: 'http://example.org/' },
+        '@id': 'http://example.org/x',
+        '@type': 'ex:Unknown',
+      });
+      expect(result[0]['_category']).toEqual(['other']);
+    });
+
+    it('recognises expanded @type IRIs', async () => {
+      const result = await service.flatten({
+        '@id': 'http://example.org/svc',
+        '@type': 'http://www.w3.org/ns/dcat#DataService',
+      });
+      expect(result[0]['_category']).toEqual(['data-service']);
+    });
+  });
+
+  describe('_parent derivation', () => {
+    it('sets _parent on a data-service referenced by a repository', async () => {
+      const result = await service.flatten({
+        '@context': {
+          dcat: 'http://www.w3.org/ns/dcat#',
+          foaf: 'http://xmlns.com/foaf/0.1/',
+        },
+        '@graph': [
+          {
+            '@id': 'http://example.org/repo',
+            '@type': ['dcat:Catalog', 'foaf:Project'],
+            'dcat:service': { '@id': 'http://example.org/svc' },
+          },
+          {
+            '@id': 'http://example.org/svc',
+            '@type': 'dcat:DataService',
+          },
+        ],
+      });
+      const svc = result.find((n) => n['@id'] === 'http://example.org/svc');
+      expect(svc!['_parent']).toBe('http://example.org/repo');
+    });
+
+    it('follows CatalogRecord foaf:primaryTopic when the direct referrer is _internal', async () => {
+      const result = await service.flatten({
+        '@context': {
+          dcat: 'http://www.w3.org/ns/dcat#',
+          dct: 'http://purl.org/dc/terms/',
+          foaf: 'http://xmlns.com/foaf/0.1/',
+        },
+        '@graph': [
+          {
+            '@id': 'eden://harvester/re3data/https://example.org/repo',
+            '@type': 'dcat:CatalogRecord',
+            'foaf:primaryTopic': { '@id': 'https://example.org/repo' },
+            'dct:conformsTo': { '@id': 'http://example.org/policy' },
+          },
+          {
+            '@id': 'http://example.org/policy',
+            '@type': 'dct:Policy',
+            'dct:title': 'Some Policy',
+          },
+        ],
+      });
+      const policy = result.find(
+        (n) => n['@id'] === 'http://example.org/policy',
+      );
+      expect(policy!['_parent']).toBe('https://example.org/repo');
+    });
+
+    it('extracts repo IRI from a harvester URI when CatalogRecord primaryTopic is a blank node', async () => {
+      const result = await service.flatten({
+        '@context': {
+          dcat: 'http://www.w3.org/ns/dcat#',
+        },
+        '@graph': [
+          {
+            '@id': 'eden://harvester/harmonized/https://example.org/repo',
+            '@type': 'dcat:CatalogRecord',
+            // primaryTopic is a blank node → embedded, no string @id
+            'foaf:primaryTopic': { '_:b0': { '@type': 'dcat:Catalog' } },
+            'dcat:service': { '@id': 'http://example.org/svc' },
+          },
+          {
+            '@id': 'http://example.org/svc',
+            '@type': 'dcat:DataService',
+          },
+        ],
+      });
+      const svc = result.find((n) => n['@id'] === 'http://example.org/svc');
+      expect(svc!['_parent']).toBe('https://example.org/repo');
+    });
+
+    it('omits _parent when there is no repository referrer and no CatalogRecord chain', async () => {
+      const result = await service.flatten({
+        '@context': {
+          dcat: 'http://www.w3.org/ns/dcat#',
+        },
+        '@graph': [
+          {
+            '@id': 'http://example.org/orphan',
+            '@type': 'dcat:DataService',
+          },
+        ],
+      });
+      const orphan = result.find(
+        (n) => n['@id'] === 'http://example.org/orphan',
+      );
+      expect(orphan!['_parent']).toBeUndefined();
+    });
+
+    it('does not self-reference via harvester-URI extraction', async () => {
+      const result = await service.flatten({
+        '@context': {
+          dcat: 'http://www.w3.org/ns/dcat#',
+          foaf: 'http://xmlns.com/foaf/0.1/',
+        },
+        '@graph': [
+          {
+            '@id': 'eden://harvester/re3data/https://example.org/repo',
+            '@type': 'dcat:CatalogRecord',
+            'foaf:primaryTopic': { '@id': 'https://example.org/repo' },
+          },
+          {
+            '@id': 'https://example.org/repo',
+            '@type': ['dcat:Catalog', 'foaf:Project'],
+          },
+        ],
+      });
+      const repo = result.find((n) => n['@id'] === 'https://example.org/repo');
+      expect(repo!['_parent']).toBeUndefined();
+    });
+
+    it('does not set _parent on a repository itself', async () => {
+      const result = await service.flatten({
+        '@context': {
+          dcat: 'http://www.w3.org/ns/dcat#',
+          foaf: 'http://xmlns.com/foaf/0.1/',
+        },
+        '@id': 'http://example.org/repo',
+        '@type': ['dcat:Catalog', 'foaf:Project'],
+      });
+      expect(result[0]['_parent']).toBeUndefined();
+    });
+  });
+
+  describe('always-array invariants', () => {
+    it('wraps scalar @type in an array on the top-level doc', async () => {
+      const result = await service.flatten({
+        '@context': { dcat: 'http://www.w3.org/ns/dcat#' },
+        '@id': 'http://example.org/x',
+        '@type': 'dcat:Catalog',
+      });
+      expect(Array.isArray(result[0]['@type'])).toBe(true);
+      expect(result[0]['@type']).toEqual(['dcat:Catalog']);
+    });
+
+    it('leaves array @type unchanged', async () => {
+      const result = await service.flatten({
+        '@context': {
+          dcat: 'http://www.w3.org/ns/dcat#',
+          foaf: 'http://xmlns.com/foaf/0.1/',
+        },
+        '@id': 'http://example.org/x',
+        '@type': ['dcat:Catalog', 'foaf:Project'],
+      });
+      expect(result[0]['@type']).toEqual(['dcat:Catalog', 'foaf:Project']);
+    });
+
+    it('keeps _policy as an array even when only one policy matches', async () => {
+      const result = await service.flatten({
+        '@context': {
+          dct: 'http://purl.org/dc/terms/',
+          dcat: 'http://www.w3.org/ns/dcat#',
+        },
+        '@graph': [
+          {
+            '@id': 'http://example.org/catalog',
+            '@type': 'dcat:Catalog',
+            'dct:conformsTo': { '@id': 'http://example.org/p' },
+          },
+          {
+            '@id': 'http://example.org/p',
+            '@type': 'dct:Policy',
+            'dct:title': 'Single Policy',
+          },
+        ],
+      });
+      const catalog = result.find(
+        (n) => n['@id'] === 'http://example.org/catalog',
+      );
+      expect(catalog!['_policy']).toEqual(['Single Policy']);
     });
   });
 });
