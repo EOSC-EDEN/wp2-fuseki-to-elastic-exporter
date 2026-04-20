@@ -1,6 +1,6 @@
 # EDEN Fuseki-to-Elastic Exporter
 
-Syncs RDF data from Apache Jena Fuseki to Elasticsearch. Detects changes via RDF Delta, syncs affected graphs incrementally every 10 minutes, and falls back to a full blue-green reindex when patch gaps are detected. Part of the EDEN WP2 project.
+Syncs RDF data from Apache Jena Fuseki to Elasticsearch. A thin proxy in front of Fuseki publishes write events to Redis for real-time sync, while a periodic reconciliation job catches missed events and deletions. Falls back to a full blue-green reindex when state is unrecoverable. Part of the EDEN WP2 project.
 
 Note: the startup of the project includes **_NO_** dummy data you will have to ingest that yourself into fuseki.
 
@@ -10,23 +10,24 @@ Note: the startup of the project includes **_NO_** dummy data you will have to i
 
 **How it works:**
 
-1. The scheduler polls RDF Delta for new patches since the last known version
-2. Patches are parsed to extract which graphs (and optionally which subjects) changed
-3. Affected graphs are enqueued as jobs in a Bull queue
-4. Each job fetches the graph from Fuseki as JSON-LD, flattens it, and indexes the documents into Elasticsearch
-5. If a patch gap is detected (e.g. delta server was reset), a full reindex is triggered automatically
-6. Full reindex uses blue-green index swapping for zero downtime
+1. The harvester writes graphs to Fuseki via HTTP (Graph Store Protocol)
+2. A thin GSP proxy sits in front of Fuseki, forwards all requests, and publishes events to Redis when harmonized graphs are written or deleted
+3. The exporter subscribes to those events and enqueues sync/delete jobs in a Bull queue for real-time updates
+4. Each job fetches the affected graph, flattens it, and updates Elasticsearch (diffing document IDs against the registry)
+5. Every 10 minutes a reconciliation job compares Fuseki's graph list against the registry — using content hashes — to catch missed events, manual changes, and deletions
+6. If the active index is missing or reconciliation fails, an automatic full reindex is triggered (blue/green swap, zero downtime)
 
 ## Stack
 
-| Service       | Image                    | Role                                 |
-| ------------- | ------------------------ | ------------------------------------ |
-| Fuseki        | `dansknaw/eden-fuseki`   | SPARQL triplestore (source of truth) |
-| Elasticsearch | `elasticsearch:9.3.0`    | Search index (target)                |
-| RDF Delta     | `conjecto/rdf-delta`     | Change detection via patch log       |
-| PostgreSQL    | `postgres:17`            | Sync state + graph registry          |
-| Redis         | `redis:7`                | Job queue backend (Bull)             |
-| App           | `dansknaw/eden-exporter` | This application                     |
+| Service        | Image                    | Role                                  |
+| -------------- | ------------------------ | ------------------------------------- |
+| Fuseki backend | `secoresearch/fuseki`    | SPARQL triplestore (source of truth)  |
+| Fuseki proxy   | (built locally)          | GSP proxy that publishes write events |
+| Elasticsearch  | `elasticsearch:9.3.0`    | Search index (target)                 |
+| PostgreSQL     | `postgres:17`            | Sync state + graph registry           |
+| Redis          | `redis:7`                | Pub/sub events + Bull queue           |
+| App            | `dansknaw/eden-exporter` | This application                      |
+| Harvester      | `dansknaw/eden-harvester`| Writes RDF data into Fuseki           |
 
 ## Getting Started
 
@@ -50,7 +51,7 @@ Prerequisites: Docker, pnpm.
 # first-time setup (copies .env.example to .env, installs deps)
 make setup
 
-# start infrastructure (fuseki, elasticsearch, postgres, redis, rdf-delta) + run migrations
+# start infrastructure (fuseki, elasticsearch, postgres, redis) + run migrations
 make start:dev
 
 # start the app in watch mode
@@ -88,7 +89,7 @@ curl -H "Authorization: Bearer $AUTH_API_TOKEN" http://localhost:3000/api/export
 All environment variables are documented in `.env.example`. The main groups:
 
 - **Core**
-- **Fuseki / RDF Delta**
+- **Fuseki**
 - **Elasticsearch**
 - **PostgreSQL**
 - **Redis**

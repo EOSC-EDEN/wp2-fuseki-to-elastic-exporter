@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-INFRA_SERVICES := fuseki elasticsearch postgres redis rdf-delta
+INFRA_SERVICES := fuseki-backend fuseki elasticsearch postgres redis
 
 .PHONY: help setup start stop start\:dev stop\:dev migrate harvest
 
