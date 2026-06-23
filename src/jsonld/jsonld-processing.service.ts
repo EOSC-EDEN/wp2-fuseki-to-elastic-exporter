@@ -32,16 +32,30 @@ export class JsonldProcessingService {
         ((flattened as FlattenedDocument)['@graph'] as JsonLdNode[]) ?? [];
     }
 
-    return this.normalizeTypeArrays(
-      this.deriveParent(
-        this.deriveCategory(
-          this.addPolicyLabels(
-            this.labelEnrichment.enrichLabels(
-              this.addBackReferences(this.embedBlankNodes(nodes)),
+    return this.dropPolicyDocuments(
+      this.normalizeTypeArrays(
+        this.deriveParent(
+          this.deriveCategory(
+            this.addPolicyLabels(
+              this.labelEnrichment.enrichLabels(
+                this.addBackReferences(this.embedBlankNodes(nodes)),
+              ),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  // Policies are evidence backing a repository's policy attributes, not
+  // standalone records: the graph in Fuseki remains the system of record for
+  // them, but they are not projected into the search index. Their titles
+  // survive on the referencing documents as the _policy field (computed in
+  // addPolicyLabels, which runs before this drop), and dct:conformsTo keeps
+  // the links to the actual documents on the web.
+  private dropPolicyDocuments(nodes: JsonLdNode[]): JsonLdNode[] {
+    return nodes.filter(
+      (node) => !(node['_category'] as string[]).includes('policy'),
     );
   }
 

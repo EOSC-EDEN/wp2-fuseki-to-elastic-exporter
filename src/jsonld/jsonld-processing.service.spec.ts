@@ -351,20 +351,24 @@ describe('JsonldProcessingService', () => {
           },
           {
             '@id': 'http://example.org/policy',
-            '@type': 'dct:Policy',
-            'dct:title': 'Shared Policy',
+            '@type': 'dct:Standard',
+            'dct:title': 'Shared Standard',
           },
         ],
       };
 
       const result = await service.flatten(document);
 
-      const policy = result.find(
+      const standard = result.find(
         (n) => n['@id'] === 'http://example.org/policy',
       );
-      expect(policy!['_referencedBy']).toHaveLength(2);
-      expect(policy!['_referencedBy']).toContain('http://example.org/catalog1');
-      expect(policy!['_referencedBy']).toContain('http://example.org/catalog2');
+      expect(standard!['_referencedBy']).toHaveLength(2);
+      expect(standard!['_referencedBy']).toContain(
+        'http://example.org/catalog1',
+      );
+      expect(standard!['_referencedBy']).toContain(
+        'http://example.org/catalog2',
+      );
     });
 
     it('should not add _referencedBy for self-references', async () => {
@@ -457,7 +461,7 @@ describe('JsonldProcessingService', () => {
       expect(result[0]['_policy']).toBeUndefined();
     });
 
-    it('should add rdfs:label to policy nodes during flattening', async () => {
+    it('drops policy documents but keeps their titles as _policy on referrers', async () => {
       const document = {
         '@context': {
           dct: 'http://purl.org/dc/terms/',
@@ -482,8 +486,12 @@ describe('JsonldProcessingService', () => {
       const policy = result.find(
         (n) => n['@id'] === 'http://example.org/policy',
       );
-      expect(policy!['rdfs:label']).toBe('Some Policy');
-      expect(policy!['dct:title']).toBe('Some Policy');
+      expect(policy).toBeUndefined();
+
+      const catalog = result.find(
+        (n) => n['@id'] === 'http://example.org/catalog',
+      );
+      expect(catalog!['_policy']).toEqual(['Some Policy']);
     });
   });
 
@@ -497,13 +505,13 @@ describe('JsonldProcessingService', () => {
       expect(result[0]['_category']).toEqual(['data-service']);
     });
 
-    it('tags dct:Policy as policy', async () => {
+    it('drops dct:Policy documents from the output entirely', async () => {
       const result = await service.flatten({
         '@context': { dct: 'http://purl.org/dc/terms/' },
         '@id': 'http://example.org/p',
         '@type': 'dct:Policy',
       });
-      expect(result[0]['_category']).toEqual(['policy']);
+      expect(result).toHaveLength(0);
     });
 
     it('tags dct:Standard as standard', async () => {
@@ -559,7 +567,7 @@ describe('JsonldProcessingService', () => {
       expect(result[0]['_category']).toEqual(['standard']);
     });
 
-    it('refines primary-topic to policy when dct:type says so', async () => {
+    it('drops policy-typed primary-topics from the output entirely', async () => {
       const result = await service.flatten({
         '@context': {
           dcat: 'http://www.w3.org/ns/dcat#',
@@ -570,7 +578,7 @@ describe('JsonldProcessingService', () => {
         '@type': ['dcat:Catalog', 'foaf:Project'],
         'dct:type': ['fairsharing:policy', 'something-else'],
       });
-      expect(result[0]['_category']).toEqual(['policy']);
+      expect(result).toHaveLength(0);
     });
 
     it('falls back to other when no rule matches', async () => {
@@ -626,19 +634,17 @@ describe('JsonldProcessingService', () => {
             '@id': 'eden://harvester/re3data/https://example.org/repo',
             '@type': 'dcat:CatalogRecord',
             'foaf:primaryTopic': { '@id': 'https://example.org/repo' },
-            'dct:conformsTo': { '@id': 'http://example.org/policy' },
+            'dcat:service': { '@id': 'http://example.org/svc' },
           },
           {
-            '@id': 'http://example.org/policy',
-            '@type': 'dct:Policy',
-            'dct:title': 'Some Policy',
+            '@id': 'http://example.org/svc',
+            '@type': 'dcat:DataService',
+            'dct:title': 'Some Service',
           },
         ],
       });
-      const policy = result.find(
-        (n) => n['@id'] === 'http://example.org/policy',
-      );
-      expect(policy!['_parent']).toBe('https://example.org/repo');
+      const svc = result.find((n) => n['@id'] === 'http://example.org/svc');
+      expect(svc!['_parent']).toBe('https://example.org/repo');
     });
 
     it('extracts repo IRI from a harvester URI when CatalogRecord primaryTopic is a blank node', async () => {
