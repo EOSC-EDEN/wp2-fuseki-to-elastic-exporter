@@ -80,9 +80,9 @@ export class ElasticsearchIndexService {
   async bulkIndex(
     indexName: string,
     documents: Record<string, unknown>[],
-  ): Promise<void> {
+  ): Promise<{ indexed: number; rejected: number }> {
     if (documents.length === 0) {
-      return;
+      return { indexed: 0, rejected: 0 };
     }
 
     // ES bulk API expects alternating action/document pairs: [action, doc, action, doc, ...]
@@ -93,8 +93,9 @@ export class ElasticsearchIndexService {
 
     const response = await this.esService.bulk({ operations });
 
+    const errorItems = response.items.filter((item) => item.index?.error);
+
     if (response.errors) {
-      const errorItems = response.items.filter((item) => item.index?.error);
       this.logger.warn(
         `Bulk indexing encountered ${errorItems.length} errors (${documents.length - errorItems.length} succeeded)`,
       );
@@ -105,10 +106,10 @@ export class ElasticsearchIndexService {
       }
     }
 
-    const successCount = response.items.filter(
-      (item) => !item.index?.error,
-    ).length;
-    this.logger.log(`Indexed ${successCount} documents into "${indexName}"`);
+    const indexed = response.items.length - errorItems.length;
+    this.logger.log(`Indexed ${indexed} documents into "${indexName}"`);
+
+    return { indexed, rejected: errorItems.length };
   }
 
   async bulkDelete(indexName: string, documentIds: string[]): Promise<void> {

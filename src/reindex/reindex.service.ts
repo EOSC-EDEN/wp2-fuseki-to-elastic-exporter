@@ -26,7 +26,11 @@ export class ReindexService {
     this.alias = esConfig!.ELASTICSEARCH_ALIAS;
   }
 
-  async reindexAll(): Promise<void> {
+  async reindexAll(): Promise<{
+    graphs: number;
+    indexed: number;
+    rejected: number;
+  }> {
     this.logger.log('Starting full reindex');
 
     const newIndexName = `${this.alias}-${Date.now()}`;
@@ -34,6 +38,8 @@ export class ReindexService {
     this.logger.log(`Created new index "${newIndexName}"`);
 
     let graphCount = 0;
+    let indexed = 0;
+    let rejected = 0;
 
     try {
       const allGraphUris = await this.fusekiService.listNamedGraphs();
@@ -58,7 +64,12 @@ export class ReindexService {
         const flattenedDocs = await this.jsonldService.flatten(document);
         const docIds = flattenedDocs.map((d) => d['@id'] as string);
 
-        await this.esIndexService.bulkIndex(newIndexName, flattenedDocs);
+        const counts = await this.esIndexService.bulkIndex(
+          newIndexName,
+          flattenedDocs,
+        );
+        indexed += counts.indexed;
+        rejected += counts.rejected;
         await this.graphRegistryService.upsert(
           graphUri,
           docIds,
@@ -86,8 +97,16 @@ export class ReindexService {
 
     await this.esIndexService.pruneStaleIndices(this.alias, [newIndexName]);
 
-    this.logger.log(
-      `Full reindex complete: ${graphCount} graphs indexed into "${newIndexName}"`,
-    );
+    if (rejected > 0) {
+      this.logger.warn(
+        `Full reindex partial: ${graphCount} graphs, ${indexed} documents indexed, ${rejected} rejected, into "${newIndexName}"`,
+      );
+    } else {
+      this.logger.log(
+        `Full reindex complete: ${graphCount} graphs, ${indexed} documents indexed into "${newIndexName}"`,
+      );
+    }
+
+    return { graphs: graphCount, indexed, rejected };
   }
 }

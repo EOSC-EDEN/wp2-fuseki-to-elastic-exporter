@@ -41,7 +41,7 @@ describe('ReindexService', () => {
       .mock(ElasticsearchIndexService)
       .impl(() => ({
         ensureIndex: jest.fn(),
-        bulkIndex: jest.fn(),
+        bulkIndex: jest.fn().mockResolvedValue({ indexed: 0, rejected: 0 }),
         swapAlias: jest.fn(),
         deleteIndex: jest.fn(),
         pruneStaleIndices: jest.fn(),
@@ -198,5 +198,33 @@ describe('ReindexService', () => {
       await expect(service.reindexAll()).rejects.toThrow('fuseki unavailable');
     });
 
+    it('should accumulate indexed and rejected counts across graphs', async () => {
+      (syncStateService.get as jest.Mock).mockResolvedValue({
+        id: 'singleton',
+        activeIndexName: null,
+      });
+      (fusekiService.listNamedGraphs as jest.Mock).mockResolvedValue([
+        'eden://harvester/harmonized/a',
+        'eden://harvester/harmonized/b',
+      ]);
+      (fusekiService.graphFingerprints as jest.Mock).mockResolvedValue(
+        new Map([
+          ['eden://harvester/harmonized/a', '1'],
+          ['eden://harvester/harmonized/b', '2'],
+        ]),
+      );
+      (fusekiService.fetchGraph as jest.Mock).mockResolvedValue({
+        '@context': {},
+        '@graph': [],
+      });
+      (jsonldService.flatten as jest.Mock).mockResolvedValue(flattenedDocs);
+      (esIndexService.bulkIndex as jest.Mock)
+        .mockResolvedValueOnce({ indexed: 2, rejected: 0 })
+        .mockResolvedValueOnce({ indexed: 1, rejected: 3 });
+
+      const result = await service.reindexAll();
+
+      expect(result).toEqual({ graphs: 2, indexed: 3, rejected: 3 });
+    });
   });
 });

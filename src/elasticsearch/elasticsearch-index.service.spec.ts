@@ -188,7 +188,30 @@ describe('ElasticsearchIndexService', () => {
 
       await expect(
         service.bulkIndex('test-index', documents),
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual({ indexed: 0, rejected: 1 });
+    });
+
+    it('should return indexed and rejected counts', async () => {
+      (esService.bulk as jest.Mock).mockResolvedValueOnce({
+        errors: true,
+        items: [
+          { index: { _id: 'a' } },
+          { index: { _id: 'b', error: { type: 'document_parsing_exception' } } },
+        ],
+      });
+
+      const result = await service.bulkIndex('test-index', [
+        { '@id': 'a' },
+        { '@id': 'b' },
+      ]);
+
+      expect(result).toEqual({ indexed: 1, rejected: 1 });
+    });
+
+    it('should return zero counts for an empty batch', async () => {
+      const result = await service.bulkIndex('test-index', []);
+
+      expect(result).toEqual({ indexed: 0, rejected: 0 });
     });
   });
 
