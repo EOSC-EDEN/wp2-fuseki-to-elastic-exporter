@@ -46,6 +46,43 @@ export class FusekiService {
     return json.results.bindings.map((binding) => binding.g.value);
   }
 
+  // A cheap per-graph change signal. One grouped count replaces fetching every
+  // graph in full just to hash it. A triple count does not detect an edit that
+  // replaces a value while leaving the count unchanged; the Redis event stream
+  // covers that case in real time, so reconciliation only has to catch what was
+  // missed while the service was down.
+  async graphFingerprints(): Promise<Map<string, string>> {
+    const query =
+      'SELECT ?g (COUNT(*) AS ?triples) WHERE { GRAPH ?g { ?s ?p ?o } } GROUP BY ?g';
+    const url = `${this.endpoint}/sparql?query=${encodeURIComponent(query)}`;
+
+    const response = await fetch(url, {
+      headers: {
+        Accept: 'application/sparql-results+json',
+        ...this.authHeaders,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch graph fingerprints: ${response.status} ${response.statusText}`,
+      );
+    }
+
+    const json = (await response.json()) as {
+      results: {
+        bindings: Array<{ g: { value: string }; triples: { value: string } }>;
+      };
+    };
+
+    return new Map(
+      json.results.bindings.map((binding) => [
+        binding.g.value,
+        binding.triples.value,
+      ]),
+    );
+  }
+
   // Uses the Graph Store Protocol (not SPARQL) to retrieve an entire named
   // graph as a single JSON-LD document it is more efficient than a CONSTRUCT query.
   async fetchGraph(graphUri: string): Promise<object> {
