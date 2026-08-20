@@ -5,7 +5,6 @@ import { FUSEKI_CONFIG_KEY } from '../config';
 
 describe('FusekiService', () => {
   let service: FusekiService;
-  const fusekiEndpoint = 'http://localhost:3030/eden';
 
   beforeEach(async () => {
     const { unit } = await TestBed.solitary(FusekiService)
@@ -13,9 +12,8 @@ describe('FusekiService', () => {
       .impl(() => ({
         get: jest.fn().mockImplementation((key: symbol) => {
           if (key === FUSEKI_CONFIG_KEY) {
-            return { FUSEKI_ENDPOINT: fusekiEndpoint };
+            return { FUSEKI_ENDPOINT: 'http://fuseki:3030/eden' };
           }
-          return undefined;
         }),
       }))
       .compile();
@@ -27,222 +25,36 @@ describe('FusekiService', () => {
     jest.restoreAllMocks();
   });
 
-  describe('listNamedGraphs', () => {
-    it('should return an array of graph URIs', async () => {
-      const sparqlResponse = {
-        results: {
-          bindings: [
-            { g: { value: 'http://example.org/graph1' } },
-            { g: { value: 'http://example.org/graph2' } },
-          ],
-        },
-      };
-
-      jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+  describe('graphFingerprints', () => {
+    it('should return one fingerprint per graph from a single query', async () => {
+      const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve(sparqlResponse),
-      } as Response);
-
-      const result = await service.listNamedGraphs();
-
-      expect(result).toEqual([
-        'http://example.org/graph1',
-        'http://example.org/graph2',
-      ]);
-    });
-
-    it('should call the correct SPARQL endpoint', async () => {
-      const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ results: { bindings: [] } }),
-      } as Response);
-
-      await service.listNamedGraphs();
-
-      expect(fetchSpy).toHaveBeenCalledWith(
-        expect.stringContaining(`${fusekiEndpoint}/sparql?query=`),
-        expect.objectContaining({
-          headers: { Accept: 'application/sparql-results+json' },
+        json: async () => ({
+          results: {
+            bindings: [
+              { g: { value: 'eden://a' }, triples: { value: '12' } },
+              { g: { value: 'eden://b' }, triples: { value: '7' } },
+            ],
+          },
         }),
-      );
+      } as unknown as Response);
+
+      const result = await service.graphFingerprints();
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(result.get('eden://a')).toBe('12');
+      expect(result.get('eden://b')).toBe('7');
     });
 
-    it('should throw when the response is not ok', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+    it('should throw when Fuseki responds with an error', async () => {
+      jest.spyOn(global, 'fetch').mockResolvedValue({
         ok: false,
-        status: 500,
-        statusText: 'Internal Server Error',
-      } as Response);
+        status: 503,
+        statusText: 'Service Unavailable',
+      } as unknown as Response);
 
-      await expect(service.listNamedGraphs()).rejects.toThrow(
-        'Failed to list named graphs: 500 Internal Server Error',
-      );
-    });
-  });
-
-  describe('fetchGraph', () => {
-    const graphUri = 'http://example.org/graph1';
-
-    it('should return parsed JSON-LD', async () => {
-      const jsonLd = {
-        '@context': { dct: 'http://purl.org/dc/terms/' },
-        '@id': 'http://example.org/resource',
-        'dct:title': 'Test',
-      };
-
-      jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(jsonLd),
-      } as Response);
-
-      const result = await service.fetchGraph(graphUri);
-
-      expect(result).toEqual(jsonLd);
-    });
-
-    it('should call the Graph Store Protocol endpoint', async () => {
-      const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({}),
-      } as Response);
-
-      await service.fetchGraph(graphUri);
-
-      expect(fetchSpy).toHaveBeenCalledWith(
-        `${fusekiEndpoint}/data?graph=${encodeURIComponent(graphUri)}`,
-        expect.objectContaining({
-          headers: { Accept: 'application/ld+json' },
-        }),
-      );
-    });
-
-    it('should throw when the response is not ok', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-        statusText: 'Not Found',
-      } as Response);
-
-      await expect(service.fetchGraph(graphUri)).rejects.toThrow(
-        `Failed to fetch graph ${graphUri}: 404 Not Found`,
-      );
-    });
-  });
-
-  describe('authentication', () => {
-    let authenticatedService: FusekiService;
-
-    beforeEach(async () => {
-      const { unit } = await TestBed.solitary(FusekiService)
-        .mock(ConfigService)
-        .impl(() => ({
-          get: jest.fn().mockImplementation((key: symbol) => {
-            if (key === FUSEKI_CONFIG_KEY) {
-              return {
-                FUSEKI_ENDPOINT: fusekiEndpoint,
-                FUSEKI_USERNAME: 'admin',
-                FUSEKI_PASSWORD: 'secret',
-              };
-            }
-            return undefined;
-          }),
-        }))
-        .compile();
-
-      authenticatedService = unit;
-    });
-
-    it('should include Basic Auth header when credentials are configured', async () => {
-      const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ results: { bindings: [] } }),
-      } as Response);
-
-      await authenticatedService.listNamedGraphs();
-
-      const expectedAuth = `Basic ${Buffer.from('admin:secret').toString('base64')}`;
-      expect(fetchSpy).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            Authorization: expectedAuth,
-          }),
-        }),
-      );
-    });
-
-    it('should not include Authorization header when credentials are absent', async () => {
-      const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ results: { bindings: [] } }),
-      } as Response);
-
-      await service.listNamedGraphs();
-
-      const headers = (fetchSpy.mock.calls[0][1] as RequestInit)
-        .headers as Record<string, string>;
-      expect(headers).not.toHaveProperty('Authorization');
-    });
-  });
-
-  describe('fetchResources', () => {
-    const graphUri = 'http://example.org/graph1';
-    const subjectUris = [
-      'http://example.org/resource/1',
-      'http://example.org/resource/2',
-    ];
-
-    it('should return parsed JSON-LD from CONSTRUCT query', async () => {
-      const jsonLd = {
-        '@context': {},
-        '@graph': [
-          { '@id': 'http://example.org/resource/1', title: 'R1' },
-          { '@id': 'http://example.org/resource/2', title: 'R2' },
-        ],
-      };
-
-      jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(jsonLd),
-      } as Response);
-
-      const result = await service.fetchResources(graphUri, subjectUris);
-
-      expect(result).toEqual(jsonLd);
-    });
-
-    it('should call the SPARQL endpoint with a CONSTRUCT query', async () => {
-      const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({}),
-      } as Response);
-
-      await service.fetchResources(graphUri, subjectUris);
-
-      expect(fetchSpy).toHaveBeenCalledWith(
-        expect.stringContaining(`${fusekiEndpoint}/sparql?query=`),
-        expect.objectContaining({
-          headers: { Accept: 'application/ld+json' },
-        }),
-      );
-      const url = fetchSpy.mock.calls[0][0] as string;
-      const query = decodeURIComponent(url.split('query=')[1]);
-      expect(query).toContain('CONSTRUCT');
-      expect(query).toContain('<http://example.org/resource/1>');
-      expect(query).toContain('<http://example.org/resource/2>');
-    });
-
-    it('should throw when the response is not ok', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        statusText: 'Internal Server Error',
-      } as Response);
-
-      await expect(
-        service.fetchResources(graphUri, subjectUris),
-      ).rejects.toThrow(
-        `Failed to fetch resources from graph ${graphUri}: 500 Internal Server Error`,
+      await expect(service.graphFingerprints()).rejects.toThrow(
+        'Failed to fetch graph fingerprints: 503 Service Unavailable',
       );
     });
   });

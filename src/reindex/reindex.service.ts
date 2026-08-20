@@ -26,51 +26,87 @@ export class ReindexService {
     this.alias = esConfig!.ELASTICSEARCH_ALIAS;
   }
 
-  async reindexAll(): Promise<void> {
+  async reindexAll(): Promise<{
+    graphs: number;
+    indexed: number;
+    rejected: number;
+  }> {
     this.logger.log('Starting full reindex');
-
-    const currentState = await this.syncStateService.get();
-    const oldIndexName = currentState.activeIndexName;
 
     const newIndexName = `${this.alias}-${Date.now()}`;
     await this.esIndexService.ensureIndex(newIndexName);
     this.logger.log(`Created new index "${newIndexName}"`);
 
-    const allGraphUris = await this.fusekiService.listNamedGraphs();
-    const graphUris = allGraphUris.filter((uri) =>
-      uri.includes('/harmonized/'),
-    );
-    this.logger.log(
-      `Found ${allGraphUris.length} named graphs, indexing ${graphUris.length} harmonized`,
-    );
+    let graphCount = 0;
+    let indexed = 0;
+    let rejected = 0;
 
-    await this.graphRegistryService.deleteAll();
+    try {
+      const allGraphUris = await this.fusekiService.listNamedGraphs();
+      const graphUris = allGraphUris.filter((uri) =>
+        uri.includes('/harmonized/'),
+      );
+      graphCount = graphUris.length;
+      this.logger.log(
+        `Found ${allGraphUris.length} named graphs, indexing ${graphUris.length} harmonized`,
+      );
 
-    for (const graphUri of graphUris) {
-      this.logger.log(`Processing graph: ${graphUri}`);
-      const document = await this.fusekiService.fetchGraph(graphUri);
-      const flattenedDocs = await this.jsonldService.flatten(document);
-      const docIds = flattenedDocs.map((d) => d['@id'] as string);
+      // Fetched once for the whole run: reconciliation compares against these
+      // same values, so a reindex that does not record them makes every graph
+      // look changed on the next tick.
+      const fingerprints = await this.fusekiService.graphFingerprints();
 
-      await this.esIndexService.bulkIndex(newIndexName, flattenedDocs);
-      await this.graphRegistryService.upsert(graphUri, docIds);
-    }
+      await this.graphRegistryService.deleteAll();
 
-    await this.esIndexService.swapAlias(this.alias, newIndexName);
-    await this.syncStateService.updateActiveIndex(newIndexName);
+      for (const graphUri of graphUris) {
+        this.logger.log(`Processing graph: ${graphUri}`);
+        const document = await this.fusekiService.fetchGraph(graphUri);
+        const flattenedDocs = await this.jsonldService.flatten(document);
+        const docIds = flattenedDocs.map((d) => d['@id'] as string);
 
-    if (oldIndexName) {
-      try {
-        await this.esIndexService.deleteIndex(oldIndexName);
-      } catch (error) {
-        this.logger.warn(
-          `Failed to delete old index "${oldIndexName}": ${error}`,
+        const counts = await this.esIndexService.bulkIndex(
+          newIndexName,
+          flattenedDocs,
+        );
+        indexed += counts.indexed;
+        rejected += counts.rejected;
+        await this.graphRegistryService.upsert(
+          graphUri,
+          docIds,
+          fingerprints.get(graphUri),
         );
       }
+
+      await this.esIndexService.swapAlias(this.alias, newIndexName);
+      await this.syncStateService.updateActiveIndex(newIndexName);
+    } catch (error) {
+      // The new index never received the alias, so nothing references it.
+      // Leaving it behind is how hundreds of indices accumulated.
+      try {
+        await this.esIndexService.deleteIndex(newIndexName);
+        this.logger.warn(
+          `Deleted incomplete index "${newIndexName}" after a failed reindex`,
+        );
+      } catch (cleanupError) {
+        this.logger.warn(
+          `Failed to delete incomplete index "${newIndexName}": ${cleanupError}`,
+        );
+      }
+      throw error;
     }
 
-    this.logger.log(
-      `Full reindex complete: ${graphUris.length} graphs indexed into "${newIndexName}"`,
-    );
+    await this.esIndexService.pruneStaleIndices(this.alias, [newIndexName]);
+
+    if (rejected > 0) {
+      this.logger.warn(
+        `Full reindex partial: ${graphCount} graphs, ${indexed} documents indexed, ${rejected} rejected, into "${newIndexName}"`,
+      );
+    } else {
+      this.logger.log(
+        `Full reindex complete: ${graphCount} graphs, ${indexed} documents indexed into "${newIndexName}"`,
+      );
+    }
+
+    return { graphs: graphCount, indexed, rejected };
   }
 }

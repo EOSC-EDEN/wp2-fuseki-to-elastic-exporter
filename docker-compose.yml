@@ -120,7 +120,7 @@ services:
     restart: unless-stopped
 
   harvester:
-    image: dansknaw/eden-harvester:0.0.1
+    image: dansknaw/eden-harvester:0.0.3
     ports:
       - "8080:8080"
     environment:
@@ -129,6 +129,20 @@ services:
       FUSEKI_PASSWORD: ${FUSEKI_PASSWORD:-admin}
       FAIRSHARING_USERNAME: ${FAIRSHARING_USERNAME:-}
       FAIRSHARING_PASSWORD: ${FAIRSHARING_PASSWORD:-}
+    depends_on:
+      fuseki:
+        condition: service_started
+    restart: unless-stopped
+
+  registry-attributes-service:
+    build: ../attributes/eden-wp2-registry-attributes-service
+    image: eden-wp2-registry-attributes-service
+    ports:
+      - "8000:8000"
+    environment:
+      REGISTRY_FUSEKI_SPARQL_ENDPOINT: http://fuseki:3030/eden/sparql
+      REGISTRY_FUSEKI_USERNAME: ${FUSEKI_USERNAME:-admin}
+      REGISTRY_FUSEKI_PASSWORD: ${FUSEKI_PASSWORD:-admin}
     depends_on:
       fuseki:
         condition: service_started

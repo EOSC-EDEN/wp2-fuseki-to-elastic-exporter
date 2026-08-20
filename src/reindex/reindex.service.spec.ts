@@ -32,6 +32,7 @@ describe('ReindexService', () => {
       .impl(() => ({
         fetchGraph: jest.fn(),
         listNamedGraphs: jest.fn(),
+        graphFingerprints: jest.fn(),
       }))
       .mock(JsonldProcessingService)
       .impl(() => ({
@@ -40,9 +41,10 @@ describe('ReindexService', () => {
       .mock(ElasticsearchIndexService)
       .impl(() => ({
         ensureIndex: jest.fn(),
-        bulkIndex: jest.fn(),
+        bulkIndex: jest.fn().mockResolvedValue({ indexed: 0, rejected: 0 }),
         swapAlias: jest.fn(),
         deleteIndex: jest.fn(),
+        pruneStaleIndices: jest.fn(),
       }))
       .mock(GraphRegistryService)
       .impl(() => ({
@@ -90,6 +92,9 @@ describe('ReindexService', () => {
       (fusekiService.listNamedGraphs as jest.Mock).mockResolvedValue([
         'eden://harvester/harmonized/https://example.org/',
       ]);
+      (fusekiService.graphFingerprints as jest.Mock).mockResolvedValue(
+        new Map([['eden://harvester/harmonized/https://example.org/', '42']]),
+      );
       (fusekiService.fetchGraph as jest.Mock).mockResolvedValue({
         '@context': {},
         '@graph': [],
@@ -113,6 +118,7 @@ describe('ReindexService', () => {
       expect(graphRegistryService.upsert).toHaveBeenCalledWith(
         'eden://harvester/harmonized/https://example.org/',
         ['http://example.org/doc/1', 'http://example.org/doc/2'],
+        '42',
       );
       expect(esIndexService.swapAlias).toHaveBeenCalledWith(
         esAlias,
@@ -121,7 +127,9 @@ describe('ReindexService', () => {
       expect(syncStateService.updateActiveIndex).toHaveBeenCalledWith(
         expect.stringMatching(/^eden-test-\d+$/),
       );
-      expect(esIndexService.deleteIndex).toHaveBeenCalledWith('eden-test-old');
+      expect(esIndexService.pruneStaleIndices).toHaveBeenCalledWith(esAlias, [
+        expect.stringMatching(/^eden-test-\d+$/),
+      ]);
     });
 
     it('should only index harmonized graphs', async () => {
@@ -134,6 +142,9 @@ describe('ReindexService', () => {
         'eden://harvester/harmonized/https://example.org/',
         'eden://harvester/re3data/https://example.org/',
       ]);
+      (fusekiService.graphFingerprints as jest.Mock).mockResolvedValue(
+        new Map(),
+      );
       (fusekiService.fetchGraph as jest.Mock).mockResolvedValue({
         '@context': {},
         '@graph': [],
@@ -148,19 +159,72 @@ describe('ReindexService', () => {
       );
     });
 
-    it('should not throw when old index deletion fails', async () => {
+    it('should delete the new index and rethrow when indexing fails', async () => {
       (syncStateService.get as jest.Mock).mockResolvedValue({
         id: 'singleton',
         activeIndexName: 'eden-test-old',
       });
-      (fusekiService.listNamedGraphs as jest.Mock).mockResolvedValue([]);
+      (fusekiService.listNamedGraphs as jest.Mock).mockResolvedValue([
+        'eden://harvester/harmonized/https://example.org/',
+      ]);
+      (fusekiService.graphFingerprints as jest.Mock).mockResolvedValue(
+        new Map([['eden://harvester/harmonized/https://example.org/', '42']]),
+      );
+      (fusekiService.fetchGraph as jest.Mock).mockRejectedValue(
+        new Error('fuseki unavailable'),
+      );
+
+      await expect(service.reindexAll()).rejects.toThrow('fuseki unavailable');
+
+      expect(esIndexService.deleteIndex).toHaveBeenCalledWith(
+        expect.stringMatching(/^eden-test-\d+$/),
+      );
+      expect(esIndexService.swapAlias).not.toHaveBeenCalled();
+      expect(syncStateService.updateActiveIndex).not.toHaveBeenCalled();
+    });
+
+    it('should still rethrow when cleaning up the failed index fails', async () => {
+      (syncStateService.get as jest.Mock).mockResolvedValue({
+        id: 'singleton',
+        activeIndexName: null,
+      });
+      (fusekiService.listNamedGraphs as jest.Mock).mockRejectedValue(
+        new Error('fuseki unavailable'),
+      );
       (esIndexService.deleteIndex as jest.Mock).mockRejectedValue(
         new Error('index not found'),
       );
 
-      await expect(service.reindexAll()).resolves.toBeUndefined();
+      await expect(service.reindexAll()).rejects.toThrow('fuseki unavailable');
+    });
 
-      expect(esIndexService.deleteIndex).toHaveBeenCalledWith('eden-test-old');
+    it('should accumulate indexed and rejected counts across graphs', async () => {
+      (syncStateService.get as jest.Mock).mockResolvedValue({
+        id: 'singleton',
+        activeIndexName: null,
+      });
+      (fusekiService.listNamedGraphs as jest.Mock).mockResolvedValue([
+        'eden://harvester/harmonized/a',
+        'eden://harvester/harmonized/b',
+      ]);
+      (fusekiService.graphFingerprints as jest.Mock).mockResolvedValue(
+        new Map([
+          ['eden://harvester/harmonized/a', '1'],
+          ['eden://harvester/harmonized/b', '2'],
+        ]),
+      );
+      (fusekiService.fetchGraph as jest.Mock).mockResolvedValue({
+        '@context': {},
+        '@graph': [],
+      });
+      (jsonldService.flatten as jest.Mock).mockResolvedValue(flattenedDocs);
+      (esIndexService.bulkIndex as jest.Mock)
+        .mockResolvedValueOnce({ indexed: 2, rejected: 0 })
+        .mockResolvedValueOnce({ indexed: 1, rejected: 3 });
+
+      const result = await service.reindexAll();
+
+      expect(result).toEqual({ graphs: 2, indexed: 3, rejected: 3 });
     });
   });
 });

@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import * as jsonld from 'jsonld';
 import type { ContextDefinition, JsonLdDocument } from 'jsonld';
 import { LabelEnrichmentService } from './label-enrichment.service';
+import { CANONICAL_CONTEXT, normalizeTypeIri } from './canonical-context';
+import { QualityMeasurementsService } from './quality-measurements.service';
+import { FUSEKI_CONFIG_KEY, type FusekiConfig } from '../config';
 
 type JsonLdNode = Record<string, unknown>;
 
@@ -12,17 +16,37 @@ interface FlattenedDocument {
 
 @Injectable()
 export class JsonldProcessingService {
-  constructor(private readonly labelEnrichment: LabelEnrichmentService) {}
+  private readonly datasetPath: string;
+
+  constructor(
+    private readonly labelEnrichment: LabelEnrichmentService,
+    private readonly qualityMeasurements: QualityMeasurementsService,
+    private readonly configService: ConfigService,
+  ) {
+    // Host-baked type IRIs carry the dataset path, so the repair needs to know
+    // it. FUSEKI_ENDPOINT is a URL such as http://fuseki:3030/eden.
+    const fusekiConfig =
+      this.configService.get<FusekiConfig>(FUSEKI_CONFIG_KEY);
+    const path = fusekiConfig?.FUSEKI_ENDPOINT
+      ? new URL(fusekiConfig.FUSEKI_ENDPOINT).pathname
+      : '';
+    this.datasetPath = path.split('/').filter(Boolean).pop() ?? 'eden';
+  }
   // W3C JSON-LD flatten returns different shapes depending on whether a context
   // is provided: an array of expanded nodes (no context) or an object with
   // @graph containing compacted nodes (with context). Both cases are handled.
-  async flatten(document: JsonLdDocument): Promise<JsonLdNode[]> {
-    const context =
-      !Array.isArray(document) && '@context' in document
-        ? (document['@context'] as ContextDefinition)
-        : undefined;
-
-    const flattened = await jsonld.flatten(document, context);
+  // Flattening against the exporter's own context rather than the document's
+  // makes field names deterministic: the harmonized graphs bind both `dc` and
+  // `dct` to Dublin Core, so the emitted prefix otherwise depends on which
+  // component last serialized the graph.
+  async flatten(
+    document: JsonLdDocument,
+    datasetPath: string = this.datasetPath,
+  ): Promise<JsonLdNode[]> {
+    const flattened = await jsonld.flatten(
+      document,
+      CANONICAL_CONTEXT as unknown as ContextDefinition,
+    );
 
     let nodes: JsonLdNode[];
     if (Array.isArray(flattened)) {
@@ -38,13 +62,46 @@ export class JsonldProcessingService {
           this.deriveCategory(
             this.addPolicyLabels(
               this.labelEnrichment.enrichLabels(
-                this.addBackReferences(this.embedBlankNodes(nodes)),
+                this.addBackReferences(
+                  this.qualityMeasurements.fold(
+                    this.repairHostBakedTypes(
+                      this.embedBlankNodes(nodes),
+                      datasetPath,
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
         ),
       ),
     );
+  }
+
+  // Runs before category derivation so a repaired type is what the rules see.
+  private repairHostBakedTypes(
+    nodes: JsonLdNode[],
+    datasetPath: string,
+  ): JsonLdNode[] {
+    return nodes.map((node) => {
+      const type = node['@type'];
+      if (type === undefined) return node;
+
+      const types = Array.isArray(type) ? type : [type];
+      const repaired = types
+        .map((t) =>
+          typeof t === 'string' ? normalizeTypeIri(t, datasetPath) : t,
+        )
+        .filter((t): t is string => typeof t === 'string');
+
+      if (repaired.length === 0) {
+        const withoutType = { ...node };
+        delete withoutType['@type'];
+        return withoutType;
+      }
+
+      return { ...node, '@type': repaired };
+    });
   }
 
   // Policies are evidence backing a repository's policy attributes, not
@@ -202,8 +259,19 @@ export class JsonldProcessingService {
   private refineByDctType(node: JsonLdNode): string | null {
     const dctType = node['dct:type'];
     const values = Array.isArray(dctType) ? dctType : [dctType];
-    for (const v of values) {
-      if (typeof v !== 'string') continue;
+    const strings = values.filter((v): v is string => typeof v === 'string');
+
+    // The harmonizer sometimes merges a policy record into the repository it
+    // belongs to, leaving dct:type asserting both at once (dcat:Catalog,
+    // foaf:Project and dc:Policy on one node). A contradictory claim is not a
+    // refinement, so fall back to the node's rdf:type, which is the stronger
+    // signal. Dropping a real repository from the registry is a worse failure
+    // than keeping a record that also looks policy-like.
+    if (strings.some((v) => /Catalog|Project/.test(v))) {
+      return null;
+    }
+
+    for (const v of strings) {
       if (/standard/i.test(v)) return 'standard';
       if (/polic/i.test(v)) return 'policy';
     }

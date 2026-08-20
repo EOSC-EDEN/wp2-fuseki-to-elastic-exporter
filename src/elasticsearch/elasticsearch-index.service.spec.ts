@@ -188,7 +188,30 @@ describe('ElasticsearchIndexService', () => {
 
       await expect(
         service.bulkIndex('test-index', documents),
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual({ indexed: 0, rejected: 1 });
+    });
+
+    it('should return indexed and rejected counts', async () => {
+      (esService.bulk as jest.Mock).mockResolvedValueOnce({
+        errors: true,
+        items: [
+          { index: { _id: 'a' } },
+          { index: { _id: 'b', error: { type: 'document_parsing_exception' } } },
+        ],
+      });
+
+      const result = await service.bulkIndex('test-index', [
+        { '@id': 'a' },
+        { '@id': 'b' },
+      ]);
+
+      expect(result).toEqual({ indexed: 1, rejected: 1 });
+    });
+
+    it('should return zero counts for an empty batch', async () => {
+      const result = await service.bulkIndex('test-index', []);
+
+      expect(result).toEqual({ indexed: 0, rejected: 0 });
     });
   });
 
@@ -332,6 +355,55 @@ describe('ElasticsearchIndexService', () => {
       expect(esService.indices.delete).toHaveBeenCalledWith({
         index: 'test-index',
       });
+    });
+  });
+
+  describe('pruneStaleIndices', () => {
+    it('should delete only unaliased, pattern-matching indices that are not kept', async () => {
+      (esService.indices.get as jest.Mock).mockResolvedValueOnce({
+        'eden-1000': { aliases: {} },
+        'eden-2000': { aliases: {} },
+        'eden-3000': { aliases: { eden: {} } },
+        'eden-manual': { aliases: {} },
+        'other-1000': { aliases: {} },
+      });
+      (esService.indices.delete as jest.Mock).mockResolvedValue({});
+
+      await service.pruneStaleIndices('eden', ['eden-2000']);
+
+      expect(esService.indices.get).toHaveBeenCalledWith({ index: 'eden-*' });
+      expect(esService.indices.delete).toHaveBeenCalledTimes(1);
+      expect(esService.indices.delete).toHaveBeenCalledWith({
+        index: 'eden-1000',
+      });
+    });
+
+    it('should not throw when listing indices fails', async () => {
+      (esService.indices.get as jest.Mock).mockRejectedValueOnce(
+        new Error('cluster unavailable'),
+      );
+
+      await expect(
+        service.pruneStaleIndices('eden', ['eden-2000']),
+      ).resolves.toBeUndefined();
+
+      expect(esService.indices.delete).not.toHaveBeenCalled();
+    });
+
+    it('should continue pruning when one deletion fails', async () => {
+      (esService.indices.get as jest.Mock).mockResolvedValueOnce({
+        'eden-1000': { aliases: {} },
+        'eden-2000': { aliases: {} },
+      });
+      (esService.indices.delete as jest.Mock)
+        .mockRejectedValueOnce(new Error('index locked'))
+        .mockResolvedValueOnce({});
+
+      await expect(
+        service.pruneStaleIndices('eden', []),
+      ).resolves.toBeUndefined();
+
+      expect(esService.indices.delete).toHaveBeenCalledTimes(2);
     });
   });
 });
