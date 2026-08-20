@@ -90,7 +90,7 @@ services:
     restart: unless-stopped
 
   app:
-    image: dansknaw/eden-exporter:latest
+    image: dansknaw/eden-exporter:0.0.2
     build: .
     ports:
       - "3000:3000"
