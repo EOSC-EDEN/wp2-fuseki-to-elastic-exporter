@@ -182,4 +182,49 @@ export class ElasticsearchIndexService {
     await this.esService.indices.delete({ index: indexName });
     this.logger.log(`Deleted index "${indexName}"`);
   }
+
+  // Removes indices left behind by interrupted reindexes. An index is deleted
+  // only when it carries the alias prefix with a numeric suffix (so a
+  // hand-created index sharing the prefix is never touched), holds no alias,
+  // and is not explicitly kept. Best-effort by design: a cleanup failure must
+  // not fail an otherwise successful reindex.
+  async pruneStaleIndices(alias: string, keep: string[]): Promise<void> {
+    const keepSet = new Set(keep);
+    const namePattern = new RegExp(`^${alias}-\\d+$`);
+
+    let indices: Record<string, { aliases?: Record<string, unknown> }>;
+    try {
+      indices = (await this.esService.indices.get({
+        index: `${alias}-*`,
+      })) as Record<string, { aliases?: Record<string, unknown> }>;
+    } catch (error) {
+      this.logger.warn(`Failed to list indices for pruning: ${error}`);
+      return;
+    }
+
+    const stale = Object.entries(indices)
+      .filter(([name, info]) => {
+        if (keepSet.has(name)) return false;
+        if (!namePattern.test(name)) return false;
+        return Object.keys(info.aliases ?? {}).length === 0;
+      })
+      .map(([name]) => name);
+
+    let pruned = 0;
+    for (const name of stale) {
+      try {
+        await this.esService.indices.delete({ index: name });
+        this.logger.log(`Pruned stale index "${name}"`);
+        pruned += 1;
+      } catch (error) {
+        this.logger.warn(`Failed to prune stale index "${name}": ${error}`);
+      }
+    }
+
+    if (stale.length > 0) {
+      this.logger.log(
+        `Pruned ${pruned} of ${stale.length} stale indices for "${alias}"`,
+      );
+    }
+  }
 }
