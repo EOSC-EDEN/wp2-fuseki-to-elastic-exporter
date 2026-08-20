@@ -259,8 +259,19 @@ export class JsonldProcessingService {
   private refineByDctType(node: JsonLdNode): string | null {
     const dctType = node['dct:type'];
     const values = Array.isArray(dctType) ? dctType : [dctType];
-    for (const v of values) {
-      if (typeof v !== 'string') continue;
+    const strings = values.filter((v): v is string => typeof v === 'string');
+
+    // The harmonizer sometimes merges a policy record into the repository it
+    // belongs to, leaving dct:type asserting both at once (dcat:Catalog,
+    // foaf:Project and dc:Policy on one node). A contradictory claim is not a
+    // refinement, so fall back to the node's rdf:type, which is the stronger
+    // signal. Dropping a real repository from the registry is a worse failure
+    // than keeping a record that also looks policy-like.
+    if (strings.some((v) => /Catalog|Project/.test(v))) {
+      return null;
+    }
+
+    for (const v of strings) {
       if (/standard/i.test(v)) return 'standard';
       if (/polic/i.test(v)) return 'policy';
     }

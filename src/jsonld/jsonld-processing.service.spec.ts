@@ -848,4 +848,69 @@ describe('JsonldProcessingService', () => {
       );
     });
   });
+
+  describe('conflicting dct:type', () => {
+    it('should keep a catalog that also claims a policy type', async () => {
+      const document = {
+        '@context': {
+          dcat: 'http://www.w3.org/ns/dcat#',
+          dct: 'http://purl.org/dc/terms/',
+          foaf: 'http://xmlns.com/foaf/0.1/',
+        },
+        '@graph': [
+          {
+            '@id': 'https://sikt.no/en/archiving-research-data',
+            '@type': ['dcat:Catalog', 'foaf:Project'],
+            'dct:type': ['dcat:Catalog', 'foaf:Project', 'dc:Policy'],
+            'dct:title': 'Sikt Research Data Archive',
+          },
+        ],
+      };
+
+      const [node] = await service.flatten(document);
+
+      expect(node).toBeDefined();
+      expect(node['_category']).toEqual(['repository']);
+    });
+
+    it('should still refine an unambiguous policy dct:type', async () => {
+      const document = {
+        '@context': {
+          dcat: 'http://www.w3.org/ns/dcat#',
+          dct: 'http://purl.org/dc/terms/',
+        },
+        '@graph': [
+          {
+            '@id': 'https://example.org/policy-record',
+            '@type': 'dcat:Catalog',
+            'dct:type': 'fairsharing:policy',
+          },
+        ],
+      };
+
+      const result = await service.flatten(document);
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('should still refine an unambiguous standard dct:type', async () => {
+      const document = {
+        '@context': {
+          dcat: 'http://www.w3.org/ns/dcat#',
+          dct: 'http://purl.org/dc/terms/',
+        },
+        '@graph': [
+          {
+            '@id': 'https://example.org/standard-record',
+            '@type': 'dcat:Catalog',
+            'dct:type': 'fairsharing:standard',
+          },
+        ],
+      };
+
+      const [node] = await service.flatten(document);
+
+      expect(node['_category']).toEqual(['standard']);
+    });
+  });
 });
