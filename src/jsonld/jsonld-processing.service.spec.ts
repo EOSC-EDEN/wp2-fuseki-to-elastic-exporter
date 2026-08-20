@@ -1,11 +1,25 @@
+import { ConfigService } from '@nestjs/config';
 import { JsonldProcessingService } from './jsonld-processing.service';
 import { LabelEnrichmentService } from './label-enrichment.service';
+import { QualityMeasurementsService } from './quality-measurements.service';
+import { FUSEKI_CONFIG_KEY } from '../config';
 
 describe('JsonldProcessingService', () => {
   let service: JsonldProcessingService;
 
   beforeEach(() => {
-    service = new JsonldProcessingService(new LabelEnrichmentService());
+    const configService = {
+      get: (key: symbol) =>
+        key === FUSEKI_CONFIG_KEY
+          ? { FUSEKI_ENDPOINT: 'http://fuseki:3030/eden' }
+          : undefined,
+    } as unknown as ConfigService;
+
+    service = new JsonldProcessingService(
+      new LabelEnrichmentService(),
+      new QualityMeasurementsService(),
+      configService,
+    );
   });
 
   describe('flatten', () => {
@@ -154,12 +168,13 @@ describe('JsonldProcessingService', () => {
     it('should handle nested blank nodes', async () => {
       const document = {
         '@context': {
-          ex: 'http://example.org/',
+          dcat: 'http://www.w3.org/ns/dcat#',
+          dct: 'http://purl.org/dc/terms/',
         },
         '@id': 'http://example.org/root',
-        'ex:child': {
-          'ex:grandchild': {
-            'ex:name': 'Deeply Nested',
+        'dcat:record': {
+          'dcat:distribution': {
+            'dct:title': 'Deeply Nested',
           },
         },
       };
@@ -168,12 +183,12 @@ describe('JsonldProcessingService', () => {
 
       expect(result).toHaveLength(1);
       const root = result[0];
-      const child = root['ex:child'] as Record<string, unknown>;
+      const child = root['dcat:record'] as Record<string, unknown>;
       expect(child).toBeDefined();
       expect(child['@id']).toBeUndefined();
-      const grandchild = child['ex:grandchild'] as Record<string, unknown>;
+      const grandchild = child['dcat:distribution'] as Record<string, unknown>;
       expect(grandchild).toBeDefined();
-      expect(grandchild['ex:name']).toBe('Deeply Nested');
+      expect(grandchild['dct:title']).toBe('Deeply Nested');
     });
 
     it('should collapse URI reference objects to plain strings', async () => {
@@ -651,6 +666,7 @@ describe('JsonldProcessingService', () => {
       const result = await service.flatten({
         '@context': {
           dcat: 'http://www.w3.org/ns/dcat#',
+          foaf: 'http://xmlns.com/foaf/0.1/',
         },
         '@graph': [
           {
@@ -769,6 +785,67 @@ describe('JsonldProcessingService', () => {
         (n) => n['@id'] === 'http://example.org/catalog',
       );
       expect(catalog!['_policy']).toEqual(['Single Policy']);
+    });
+  });
+
+  describe('canonical prefixes', () => {
+    it('should emit dct: regardless of the prefix the document used', async () => {
+      const document = {
+        '@context': {
+          dc: 'http://purl.org/dc/terms/',
+          dcat: 'http://www.w3.org/ns/dcat#',
+        },
+        '@graph': [
+          {
+            '@id': 'https://example.org/thing',
+            '@type': 'dcat:Catalog',
+            'dc:title': 'A catalog',
+          },
+        ],
+      };
+
+      const [node] = await service.flatten(document);
+
+      expect(node['dct:title']).toBe('A catalog');
+      expect(node['dc:title']).toBeUndefined();
+    });
+
+    it('should classify a policy that arrived with the dc prefix', async () => {
+      const document = {
+        '@context': { dc: 'http://purl.org/dc/terms/' },
+        '@graph': [
+          {
+            '@id': 'https://example.org/policy',
+            '@type': 'dc:Policy',
+            'dc:title': 'Preservation policy',
+          },
+        ],
+      };
+
+      const result = await service.flatten(document);
+
+      expect(result).toHaveLength(0);
+    });
+  });
+
+  describe('host-baked types', () => {
+    it('should repair a type IRI carrying the Fuseki host', async () => {
+      const document = {
+        '@context': { dcat: 'http://www.w3.org/ns/dcat#' },
+        '@graph': [
+          {
+            '@id': 'https://example.org/thing',
+            '@type': ['http://fuseki:3030/eden/CreativeWork', 'dcat:Catalog'],
+          },
+        ],
+      };
+
+      const [node] = await service.flatten(document);
+
+      expect(node['@type']).toContain('schema:CreativeWork');
+      expect(node['@type']).not.toContain(
+        'http://fuseki:3030/eden/CreativeWork',
+      );
     });
   });
 });
