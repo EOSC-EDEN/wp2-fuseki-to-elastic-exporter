@@ -8,7 +8,6 @@ import { SchedulerRegistry } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { CronJob } from 'cron';
 import Redis from 'ioredis';
-import { createHash } from 'node:crypto';
 import { SyncStateService } from '../graph-sync/sync-state.service';
 import { SyncQueueProducerService } from '../sync-queue/sync-queue.producer.service';
 import { FusekiService } from '../fuseki/fuseki.service';
@@ -29,11 +28,17 @@ interface GraphChangeEvent {
 
 const REDIS_CHANNEL = 'fuseki:graph-changed';
 
+// A reconciliation error used to trigger a full reindex on every tick. At a ten
+// minute interval a persistent failure meant 144 reindexes a day, each one
+// creating an index.
+const FULL_REINDEX_COOLDOWN_MS = 30 * 60 * 1000;
+
 @Injectable()
 export class SyncSchedulerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(SyncSchedulerService.name);
   private subscriber: Redis;
   private isReconciling = false;
+  private lastFullReindexAt = 0;
 
   constructor(
     private readonly schedulerRegistry: SchedulerRegistry,
@@ -124,9 +129,9 @@ export class SyncSchedulerService implements OnModuleInit, OnModuleDestroy {
 
       if (!state.activeIndexName) {
         this.logger.warn(
-          'No active index found — triggering full reindex for recovery',
+          'No active index found, triggering full reindex for recovery',
         );
-        await this.reindexService.reindexAll();
+        await this.runFullReindexIfAllowed('no active index');
         return;
       }
 
@@ -147,16 +152,16 @@ export class SyncSchedulerService implements OnModuleInit, OnModuleDestroy {
       // Detect new graphs
       const newGraphs = fusekiGraphs.filter((g) => !registryMap.has(g));
 
-      // Detect changed graphs via content hash
+      // Detect changed graphs by fingerprint. One grouped query replaces
+      // fetching every graph in full on every tick.
+      const fingerprints = await this.fusekiService.graphFingerprints();
       const changedGraphs: string[] = [];
       for (const graphUri of fusekiGraphs) {
         const registered = registryMap.get(graphUri);
         if (!registered) continue;
 
-        const content = await this.fusekiService.fetchGraph(graphUri);
-        const hash = this.computeHash(content);
-
-        if (hash !== registered.contentHash) {
+        const fingerprint = fingerprints.get(graphUri);
+        if (fingerprint !== registered.contentHash) {
           changedGraphs.push(graphUri);
         }
       }
@@ -189,18 +194,26 @@ export class SyncSchedulerService implements OnModuleInit, OnModuleDestroy {
         `Reconciliation complete: ${newGraphs.length} new, ${changedGraphs.length} changed, ${deletedGraphs.length} deleted`,
       );
     } catch (error) {
-      this.logger.error(
-        'Reconciliation failed — triggering full reindex',
-        error,
-      );
-      await this.reindexService.reindexAll();
+      this.logger.error('Reconciliation failed', error);
+      await this.runFullReindexIfAllowed('reconciliation failed');
     } finally {
       this.isReconciling = false;
     }
   }
 
-  private computeHash(content: object): string {
-    return createHash('sha256').update(JSON.stringify(content)).digest('hex');
+  // In-memory on purpose: a process restart should be allowed one recovery
+  // attempt, which is exactly when a full reindex is most likely to be correct.
+  private async runFullReindexIfAllowed(reason: string): Promise<void> {
+    const elapsed = Date.now() - this.lastFullReindexAt;
+    if (elapsed < FULL_REINDEX_COOLDOWN_MS) {
+      this.logger.warn(
+        `Skipping full reindex (${reason}): last attempt was ${Math.round(elapsed / 1000)}s ago`,
+      );
+      return;
+    }
+
+    this.lastFullReindexAt = Date.now();
+    await this.reindexService.reindexAll();
   }
 
   private getIndexName(activeIndexName: string | null): string {

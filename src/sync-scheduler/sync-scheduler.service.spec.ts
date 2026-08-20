@@ -54,6 +54,7 @@ describe('SyncSchedulerService', () => {
       .impl(() => ({
         listNamedGraphs: jest.fn(),
         fetchGraph: jest.fn(),
+        graphFingerprints: jest.fn(),
       }))
       .mock(GraphRegistryService)
       .impl(() => ({
@@ -123,7 +124,7 @@ describe('SyncSchedulerService', () => {
       );
     });
 
-    it('should detect changed graphs via content hash', async () => {
+    it('should detect changed graphs via fingerprint', async () => {
       const graphUri = 'eden://harvester/harmonized/https://pangaea.de/';
       (syncState.get as jest.Mock).mockResolvedValue({
         activeIndexName: 'eden-test-123',
@@ -131,16 +132,16 @@ describe('SyncSchedulerService', () => {
       (fusekiService.listNamedGraphs as jest.Mock).mockResolvedValue([
         graphUri,
       ]);
+      (fusekiService.graphFingerprints as jest.Mock).mockResolvedValue(
+        new Map([[graphUri, '84']]),
+      );
       (graphRegistry.findAll as jest.Mock).mockResolvedValue([
         {
           graphUri,
-          contentHash: 'old-hash',
+          contentHash: '42',
           documentIds: ['https://pangaea.de/'],
         },
       ]);
-      (fusekiService.fetchGraph as jest.Mock).mockResolvedValue({
-        '@graph': [{ '@id': 'https://pangaea.de/', 'dct:title': 'Changed' }],
-      });
 
       await service.reconcile();
 
@@ -153,11 +154,6 @@ describe('SyncSchedulerService', () => {
 
     it('should skip unchanged graphs', async () => {
       const graphUri = 'eden://harvester/harmonized/https://pangaea.de/';
-      const content = { '@graph': [{ '@id': 'https://pangaea.de/' }] };
-      const { createHash } = await import('node:crypto');
-      const hash = createHash('sha256')
-        .update(JSON.stringify(content))
-        .digest('hex');
 
       (syncState.get as jest.Mock).mockResolvedValue({
         activeIndexName: 'eden-test-123',
@@ -165,15 +161,18 @@ describe('SyncSchedulerService', () => {
       (fusekiService.listNamedGraphs as jest.Mock).mockResolvedValue([
         graphUri,
       ]);
+      (fusekiService.graphFingerprints as jest.Mock).mockResolvedValue(
+        new Map([[graphUri, '42']]),
+      );
       (graphRegistry.findAll as jest.Mock).mockResolvedValue([
-        { graphUri, contentHash: hash, documentIds: ['https://pangaea.de/'] },
+        { graphUri, contentHash: '42', documentIds: ['https://pangaea.de/'] },
       ]);
-      (fusekiService.fetchGraph as jest.Mock).mockResolvedValue(content);
 
       await service.reconcile();
 
       expect(syncQueueProducer.enqueueSyncGraph).not.toHaveBeenCalled();
       expect(syncQueueProducer.enqueueDeleteGraph).not.toHaveBeenCalled();
+      expect(reindexService.reindexAll).not.toHaveBeenCalled();
     });
 
     it('should trigger full reindex when no active index exists', async () => {
@@ -198,6 +197,51 @@ describe('SyncSchedulerService', () => {
       await service.reconcile();
 
       expect(reindexService.reindexAll).toHaveBeenCalled();
+    });
+  });
+
+  describe('reconcile change detection and cooldown', () => {
+    it('should detect changes from fingerprints without fetching graphs', async () => {
+      (syncState.get as jest.Mock).mockResolvedValue({
+        id: 'singleton',
+        activeIndexName: 'eden-1',
+      });
+      (fusekiService.listNamedGraphs as jest.Mock).mockResolvedValue([
+        'eden://harvester/harmonized/a',
+        'eden://harvester/harmonized/b',
+      ]);
+      (fusekiService.graphFingerprints as jest.Mock).mockResolvedValue(
+        new Map([
+          ['eden://harvester/harmonized/a', '10'],
+          ['eden://harvester/harmonized/b', '20'],
+        ]),
+      );
+      (graphRegistry.findAll as jest.Mock).mockResolvedValue([
+        { graphUri: 'eden://harvester/harmonized/a', contentHash: '10' },
+        { graphUri: 'eden://harvester/harmonized/b', contentHash: '19' },
+      ]);
+
+      await service.reconcile();
+
+      expect(fusekiService.fetchGraph).not.toHaveBeenCalled();
+      expect(syncQueueProducer.enqueueSyncGraph).toHaveBeenCalledTimes(1);
+      expect(syncQueueProducer.enqueueSyncGraph).toHaveBeenCalledWith(
+        'eden://harvester/harmonized/b',
+        'eden-1',
+        null,
+      );
+    });
+
+    it('should skip the fallback reindex while inside the cooldown', async () => {
+      (syncState.get as jest.Mock).mockResolvedValue({
+        id: 'singleton',
+        activeIndexName: null,
+      });
+
+      await service.reconcile();
+      await service.reconcile();
+
+      expect(reindexService.reindexAll).toHaveBeenCalledTimes(1);
     });
   });
 });
