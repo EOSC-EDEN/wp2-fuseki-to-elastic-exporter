@@ -134,6 +134,20 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  registry-attributes-service:
+    build: ../attributes/eden-wp2-registry-attributes-service
+    image: eden-wp2-registry-attributes-service
+    ports:
+      - "8000:8000"
+    environment:
+      REGISTRY_FUSEKI_SPARQL_ENDPOINT: http://fuseki:3030/eden/sparql
+      REGISTRY_FUSEKI_USERNAME: ${FUSEKI_USERNAME:-admin}
+      REGISTRY_FUSEKI_PASSWORD: ${FUSEKI_PASSWORD:-admin}
+    depends_on:
+      fuseki:
+        condition: service_started
+    restart: unless-stopped
+
 volumes:
   fuseki-data:
   elasticsearch-data:
