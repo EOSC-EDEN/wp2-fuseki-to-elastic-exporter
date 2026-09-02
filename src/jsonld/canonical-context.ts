@@ -27,6 +27,7 @@ export const CANONICAL_CONTEXT: Record<string, string> = {
   rdfs: 'http://www.w3.org/2000/01/rdf-schema#',
   xsd: 'http://www.w3.org/2001/XMLSchema#',
   oa: 'http://www.w3.org/ns/oa#',
+  trsp: 'https://w3id.org/trsp/',
 };
 
 // Source sites publish schema.org JSON-LD in which `@type` is a bare token such

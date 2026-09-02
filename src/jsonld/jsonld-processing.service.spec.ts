@@ -23,6 +23,120 @@ describe('JsonldProcessingService', () => {
   });
 
   describe('flatten', () => {
+    it('adds static FIDELIS attributes for a known repository when the graph has none', async () => {
+      const document = {
+        '@context': {
+          dcat: 'http://www.w3.org/ns/dcat#',
+        },
+        '@id': 'https://www.wdc-climate.de/ui/',
+        '@type': 'dcat:Catalog',
+      };
+
+      const result = await service.flatten(document);
+
+      expect(result[0]).toMatchObject({
+        'trsp:att.4570870110': ['Germany'],
+        'trsp:att.48BF7E1522': ['1999'],
+        'trsp:att.6A715E3A22': ['Discipline-specific Repository'],
+        'trsp:att.27C898E8A0': [
+          'Certified',
+          'CoreTrustSeal Certification',
+          'WDS accreditation',
+        ],
+        'trsp:att.241E6C58DF': [
+          'CMIP infrastructure',
+          'EOSC',
+          'ICSU World Data System (WDS; regular member since 2003)',
+          'IS-ENES',
+          'WMO (Data Collection and Processing Centre – DCPC)',
+        ],
+      });
+    });
+
+    it('keeps each graph-provided FIDELIS attribute authoritative while filling other gaps', async () => {
+      const document = {
+        '@context': {
+          dcat: 'http://www.w3.org/ns/dcat#',
+          trsp: 'https://w3id.org/trsp/',
+        },
+        '@id': 'https://www.wdc-climate.de/ui/',
+        '@type': 'dcat:Catalog',
+        'trsp:att.4570870110': 'Graph country',
+        'trsp:att.27C898E8A0': 'Graph certification',
+      };
+
+      const result = await service.flatten(document);
+
+      expect(result[0]['trsp:att.4570870110']).toBe('Graph country');
+      expect(result[0]['trsp:att.27C898E8A0']).toBe('Graph certification');
+      expect(result[0]['trsp:att.48BF7E1522']).toEqual(['1999']);
+    });
+
+    it('projects a four-digit year established as a searchable date', async () => {
+      const document = {
+        '@context': {
+          dcat: 'http://www.w3.org/ns/dcat#',
+          trsp: 'https://w3id.org/trsp/',
+        },
+        '@id': 'https://example.org/repository',
+        '@type': 'dcat:Catalog',
+        'trsp:att.48BF7E1522': '1984',
+      };
+
+      const result = await service.flatten(document);
+
+      expect(result[0]['_yearEstablished']).toBe('1984-01-01');
+    });
+
+    it('adds static profile memberships for a known repository when the graph has none', async () => {
+      const document = {
+        '@context': {
+          dcat: 'http://www.w3.org/ns/dcat#',
+        },
+        '@id': 'https://dais.sanu.ac.rs/',
+        '@type': 'dcat:Catalog',
+      };
+
+      const result = await service.flatten(document);
+
+      expect(result[0]['trsp:hasApplicableProfile']).toEqual([
+        'trsp:profile.39A738E4E3',
+        'trsp:profile.3C2D6C1C37',
+      ]);
+    });
+
+    it('keeps graph-provided profile memberships authoritative', async () => {
+      const document = {
+        '@context': {
+          dcat: 'http://www.w3.org/ns/dcat#',
+          trsp: 'https://w3id.org/trsp/',
+        },
+        '@id': 'https://dais.sanu.ac.rs/',
+        '@type': 'dcat:Catalog',
+        'trsp:hasApplicableProfile': 'trsp:profile.graph-provided',
+      };
+
+      const result = await service.flatten(document);
+
+      expect(result[0]['trsp:hasApplicableProfile']).toBe(
+        'trsp:profile.graph-provided',
+      );
+    });
+
+    it('does not invent profile memberships for an unknown repository', async () => {
+      const document = {
+        '@context': {
+          dcat: 'http://www.w3.org/ns/dcat#',
+        },
+        '@id': 'https://unknown.example/repository',
+        '@type': 'dcat:Catalog',
+      };
+
+      const result = await service.flatten(document);
+
+      expect(result[0]['trsp:hasApplicableProfile']).toBeUndefined();
+    });
+
     it('should flatten a JSON-LD document and return URI nodes', async () => {
       const document = {
         '@context': {
@@ -911,6 +1025,126 @@ describe('JsonldProcessingService', () => {
       const [node] = await service.flatten(document);
 
       expect(node['_category']).toEqual(['standard']);
+    });
+  });
+
+  describe('current harmonized graph contract', () => {
+    it('projects repository, service, and DQV facts without synthesizing TRSP fields', async () => {
+      const document = {
+        '@context': {
+          dcat: 'http://www.w3.org/ns/dcat#',
+          dct: 'http://purl.org/dc/terms/',
+          foaf: 'http://xmlns.com/foaf/0.1/',
+          prov: 'http://www.w3.org/ns/prov#',
+          dqv: 'http://www.w3.org/ns/dqv#',
+          xsd: 'http://www.w3.org/2001/XMLSchema#',
+          rdfs: 'http://www.w3.org/2000/01/rdf-schema#',
+          trsp: 'https://w3id.org/trsp/',
+        },
+        '@graph': [
+          {
+            '@id': 'eden://harvester/harmonized/https://example.org/',
+            '@type': 'dcat:CatalogRecord',
+            'foaf:primaryTopic': { '@id': 'https://example.org/' },
+            'prov:wasGeneratedBy': { '@id': 'eden://validator/run/run-1' },
+          },
+          {
+            '@id': 'https://example.org/',
+            '@type': ['dcat:Catalog', 'foaf:Project'],
+            'dct:title': 'Example Repository',
+            'dct:description': 'Repository description',
+            'dct:identifier': ['https://example.org/', 'r3d100000001'],
+            'dct:language': 'en',
+            'dct:license': 'https://creativecommons.org/licenses/by/4.0/',
+            'dcat:keyword': ['research data', 'example'],
+            'dcat:service': [{ '@id': 'https://example.org/oai' }],
+            'trsp:hasApplicableProfile': {
+              '@id': 'https://w3id.org/trsp/profile.3C2D6C1C37',
+            },
+          },
+          {
+            '@id': 'https://example.org/oai',
+            '@type': 'dcat:DataService',
+            'dct:title': 'OAI-PMH - Example Repository',
+            'dct:type': 'OAI-PMH',
+            'dct:conformsTo':
+              'https://www.openarchives.org/OAI/openarchivesprotocol.html',
+            'dcat:endpointURL': 'https://example.org/oai',
+            'dqv:hasQualityMeasurement': [
+              {
+                '@id': 'eden://validator/measurement/example-available',
+              },
+              { '@id': 'eden://validator/measurement/example-score' },
+            ],
+          },
+          {
+            '@id': 'eden://validator/measurement/example-available',
+            '@type': 'dqv:QualityMeasurement',
+            'dqv:isMeasurementOf':
+              'eden://validator/metric/endpointAvailability',
+            'dqv:value': { '@value': 'true', '@type': 'xsd:boolean' },
+            'prov:generatedAtTime': {
+              '@value': '2026-08-20T11:18:55.074Z',
+              '@type': 'xsd:dateTime',
+            },
+          },
+          {
+            '@id': 'eden://validator/measurement/example-score',
+            '@type': 'dqv:QualityMeasurement',
+            'dqv:isMeasurementOf': 'eden://validator/metric/validationScore',
+            'dqv:value': { '@value': '6', '@type': 'xsd:decimal' },
+            'prov:generatedAtTime': {
+              '@value': '2026-08-20T11:18:55.074Z',
+              '@type': 'xsd:dateTime',
+            },
+          },
+          {
+            '@id': 'eden://validator/run/run-1',
+            '@type': 'prov:Activity',
+            'rdfs:label': 'Validation run',
+          },
+        ],
+      };
+
+      const result = await service.flatten(document);
+      const byId = new Map(result.map((node) => [node['@id'], node]));
+
+      const repository = byId.get('https://example.org/');
+      expect(repository).toMatchObject({
+        '@type': ['dcat:Catalog', 'foaf:Project'],
+        'dct:title': 'Example Repository',
+        'dct:language': 'en',
+        'dcat:service': 'https://example.org/oai',
+        'trsp:hasApplicableProfile': 'trsp:profile.3C2D6C1C37',
+        _category: ['repository'],
+      });
+
+      const serviceDocument = byId.get('https://example.org/oai');
+      expect(serviceDocument).toMatchObject({
+        '@type': ['dcat:DataService'],
+        'dct:title': 'OAI-PMH - Example Repository',
+        'dct:type': 'OAI-PMH',
+        'dcat:endpointURL': 'https://example.org/oai',
+        _endpointAvailability: true,
+        _validationScore: 6,
+        _validatedAt: '2026-08-20T11:18:55.074Z',
+        _category: ['data-service'],
+        _parent: 'https://example.org/',
+      });
+
+      expect(byId.has('eden://validator/measurement/example-available')).toBe(
+        false,
+      );
+      expect(byId.has('eden://validator/measurement/example-score')).toBe(
+        false,
+      );
+      expect(byId.has('eden://validator/run/run-1')).toBe(false);
+
+      for (const node of result) {
+        expect(
+          Object.keys(node).some((key) => key.startsWith('trsp:att.')),
+        ).toBe(false);
+      }
     });
   });
 });

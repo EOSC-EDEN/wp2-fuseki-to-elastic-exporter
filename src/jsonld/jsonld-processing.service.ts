@@ -5,6 +5,8 @@ import type { ContextDefinition, JsonLdDocument } from 'jsonld';
 import { LabelEnrichmentService } from './label-enrichment.service';
 import { CANONICAL_CONTEXT, normalizeTypeIri } from './canonical-context';
 import { QualityMeasurementsService } from './quality-measurements.service';
+import { addProfileMembershipFallback } from './profile-membership-fallback';
+import { addRepositoryAttributeFallback } from './repository-attribute-fallback';
 import { FUSEKI_CONFIG_KEY, type FusekiConfig } from '../config';
 
 type JsonLdNode = Record<string, unknown>;
@@ -57,16 +59,22 @@ export class JsonldProcessingService {
     }
 
     return this.dropPolicyDocuments(
-      this.normalizeTypeArrays(
-        this.deriveParent(
-          this.deriveCategory(
-            this.addPolicyLabels(
-              this.labelEnrichment.enrichLabels(
-                this.addBackReferences(
-                  this.qualityMeasurements.fold(
-                    this.repairHostBakedTypes(
-                      this.embedBlankNodes(nodes),
-                      datasetPath,
+      this.deriveYearEstablished(
+        addRepositoryAttributeFallback(
+          addProfileMembershipFallback(
+            this.normalizeTypeArrays(
+              this.deriveParent(
+                this.deriveCategory(
+                  this.addPolicyLabels(
+                    this.labelEnrichment.enrichLabels(
+                      this.addBackReferences(
+                        this.qualityMeasurements.fold(
+                          this.repairHostBakedTypes(
+                            this.embedBlankNodes(nodes),
+                            datasetPath,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -76,6 +84,21 @@ export class JsonldProcessingService {
         ),
       ),
     );
+  }
+
+  private deriveYearEstablished(nodes: JsonLdNode[]): JsonLdNode[] {
+    return nodes.map((node) => {
+      if (node['_yearEstablished'] != null) return node;
+
+      const raw = node['trsp:att.48BF7E1522'];
+      const values = Array.isArray(raw) ? raw : [raw];
+      const year = values.find(
+        (value): value is string =>
+          typeof value === 'string' && /^\d{4}$/.test(value),
+      );
+
+      return year ? { ...node, _yearEstablished: `${year}-01-01` } : node;
+    });
   }
 
   // Runs before category derivation so a repaired type is what the rules see.
@@ -89,7 +112,7 @@ export class JsonldProcessingService {
 
       const types = Array.isArray(type) ? type : [type];
       const repaired = types
-        .map((t) =>
+        .map((t: unknown) =>
           typeof t === 'string' ? normalizeTypeIri(t, datasetPath) : t,
         )
         .filter((t): t is string => typeof t === 'string');

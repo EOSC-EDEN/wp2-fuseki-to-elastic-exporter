@@ -19,6 +19,9 @@ export class ElasticsearchIndexService {
       await this.esService.indices.create({
         index: indexName,
         mappings: {
+          properties: {
+            _yearEstablished: { type: 'date', format: 'yyyy-MM-dd' },
+          },
           dynamic_templates: [
             {
               strings_as_text_and_keyword: {

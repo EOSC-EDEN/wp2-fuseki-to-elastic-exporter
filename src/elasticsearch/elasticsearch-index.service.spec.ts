@@ -32,6 +32,9 @@ describe('ElasticsearchIndexService', () => {
         expect.objectContaining({
           index: 'test-index',
           mappings: expect.objectContaining({
+            properties: expect.objectContaining({
+              _yearEstablished: { type: 'date', format: 'yyyy-MM-dd' },
+            }),
             dynamic_templates: expect.arrayContaining([
               expect.objectContaining({
                 strings_as_text_and_keyword: expect.anything(),
@@ -186,9 +189,9 @@ describe('ElasticsearchIndexService', () => {
         { '@id': 'http://example.org/doc1', '@type': 'Thing' },
       ];
 
-      await expect(
-        service.bulkIndex('test-index', documents),
-      ).resolves.toEqual({ indexed: 0, rejected: 1 });
+      await expect(service.bulkIndex('test-index', documents)).resolves.toEqual(
+        { indexed: 0, rejected: 1 },
+      );
     });
 
     it('should return indexed and rejected counts', async () => {
@@ -196,7 +199,9 @@ describe('ElasticsearchIndexService', () => {
         errors: true,
         items: [
           { index: { _id: 'a' } },
-          { index: { _id: 'b', error: { type: 'document_parsing_exception' } } },
+          {
+            index: { _id: 'b', error: { type: 'document_parsing_exception' } },
+          },
         ],
       });
 
