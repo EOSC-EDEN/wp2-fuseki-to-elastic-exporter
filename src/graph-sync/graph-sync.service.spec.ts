@@ -63,6 +63,42 @@ describe('GraphSyncService', () => {
   });
 
   describe('syncGraph', () => {
+    it('does not project internal provenance documents into the search index', async () => {
+      const rawDocument = { '@context': {}, '@graph': [] };
+      const documentsWithProvenance = [
+        ...flattenedDocs,
+        {
+          '@id': 'eden://harvester/harmonized/http://example.org/doc/1',
+          '@type': ['dcat:CatalogRecord'],
+          'prov:wasAssociatedWith': 'eden://harvester',
+          _category: ['_internal'],
+        },
+      ];
+      (fusekiService.fetchGraph as jest.Mock).mockResolvedValueOnce(
+        rawDocument,
+      );
+      (jsonldService.flatten as jest.Mock).mockResolvedValueOnce(
+        documentsWithProvenance,
+      );
+      (graphRegistryService.findByGraphUri as jest.Mock).mockResolvedValueOnce(
+        null,
+      );
+      (esIndexService.bulkIndex as jest.Mock).mockResolvedValueOnce(undefined);
+      (graphRegistryService.upsert as jest.Mock).mockResolvedValueOnce({});
+
+      await service.syncGraph(graphUri, indexName);
+
+      expect(esIndexService.bulkIndex).toHaveBeenCalledWith(
+        indexName,
+        flattenedDocs,
+      );
+      expect(graphRegistryService.upsert).toHaveBeenCalledWith(
+        graphUri,
+        ['http://example.org/doc/1', 'http://example.org/doc/2'],
+        expect.any(String),
+      );
+    });
+
     it('should index a new graph when no registry exists', async () => {
       const rawDocument = { '@context': {}, '@graph': [] };
       (fusekiService.fetchGraph as jest.Mock).mockResolvedValueOnce(

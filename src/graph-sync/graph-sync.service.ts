@@ -20,7 +20,9 @@ export class GraphSyncService {
     this.logger.log(`Syncing graph "${graphUri}" to index "${indexName}"`);
 
     const document = await this.fusekiService.fetchGraph(graphUri);
-    const flattenedDocs = await this.jsonldService.flatten(document);
+    const flattenedDocs = this.searchDocuments(
+      await this.jsonldService.flatten(document),
+    );
     const newDocIds = flattenedDocs.map((d) => d['@id'] as string);
 
     const existing = await this.graphRegistryService.findByGraphUri(graphUri);
@@ -55,7 +57,9 @@ export class GraphSyncService {
       graphUri,
       subjectUris,
     );
-    const flattenedDocs = await this.jsonldService.flatten(document);
+    const flattenedDocs = this.searchDocuments(
+      await this.jsonldService.flatten(document),
+    );
     const returnedIds = new Set(flattenedDocs.map((d) => d['@id'] as string));
 
     const addedOrUpdatedIds = [...returnedIds];
@@ -91,5 +95,14 @@ export class GraphSyncService {
     await this.graphRegistryService.delete(graphUri);
 
     this.logger.log(`Deleted graph "${graphUri}" and its documents`);
+  }
+
+  private searchDocuments(
+    documents: Record<string, unknown>[],
+  ): Record<string, unknown>[] {
+    return documents.filter((document) => {
+      const categories = document['_category'];
+      return !Array.isArray(categories) || !categories.includes('_internal');
+    });
   }
 }
