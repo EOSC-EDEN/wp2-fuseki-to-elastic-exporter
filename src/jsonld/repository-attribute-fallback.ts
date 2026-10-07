@@ -112,7 +112,7 @@ const ATTRIBUTES: AttributeFallbacks = {
       'Consortium – RWTH Aachen-led; consortium of NRW partner institutions; governance by board of member institutions',
     ],
   },
-  'https://agroportal.eu': {
+  'https://agroportal.lirmm.fr': {
     'trsp:att.01D16EFB9B': [
       'LIRMM/CNRS; University of Montpellier; INRAE; CIRAD; agricultural and food science research community; FAO',
     ],
@@ -956,7 +956,7 @@ const ATTRIBUTES: AttributeFallbacks = {
       'Institutional – Sciences Po Paris; CDSP is a joint research centre of Sciences Po and CNRS',
     ],
   },
-  'https://data.utm.csic.es': {
+  'https://data.utm.csic.es/portal': {
     'trsp:att.01D16EFB9B': [
       'CSIC; UTM Barcelona; Spanish marine science and oceanography community; EU marine research infrastructure projects',
     ],
@@ -1806,7 +1806,7 @@ const ATTRIBUTES: AttributeFallbacks = {
       'Joint facility of AWI and MARUM; governed by steering committee (established 2011) representing both host institutions; coordination unit manages operations',
     ],
   },
-  'https://phaidra.cab.unipd.it': {
+  'https://phaidra.unipd.it': {
     'trsp:att.01D16EFB9B': [
       'University of Padua; Italian research community; GARR; European cultural heritage community',
     ],
@@ -1907,45 +1907,46 @@ const ATTRIBUTES: AttributeFallbacks = {
       'Institutional – Syracuse University Maxwell School; governed by advisory board with international membership; Sloan Foundation funded launch',
     ],
   },
-  'https://radar.brookes.ac.uk': {
-    'trsp:att.01D16EFB9B': [
-      'Oxford Brookes University; UKRI; UK research funders; Jisc',
-    ],
-    'trsp:att.035ACCB10D': [
-      'Institutional research data repository of Oxford Brookes University (Research Archive and Digital Asset Repository – RADAR). Supports data sharing and open access compliance for Oxford Brookes researchers across all faculties.',
-    ],
-    'trsp:att.1BF23E39F5': ['All common formats'],
-    'trsp:att.1D00720769': ['Minimum 10 years'],
-    'trsp:att.241E6C58DF': ['EOSC', 'Jisc', 'OpenAIRE'],
-    'trsp:att.27C898E8A0': ['None', 'Not certified'],
-    'trsp:att.2F993B25AD': ['DOI'],
-    'trsp:att.394BC515E7': ['No'],
-    'trsp:att.3B633179C5': ['Multiple/General'],
-    'trsp:att.4570870110': ['United Kingdom'],
-    'trsp:att.48BF7E1522': ['2018'],
-    'trsp:att.494B22C440': ['Institutional'],
-    'trsp:att.521A4A9E17': [
-      'Oxford Brookes University researchers; open for reuse internationally',
-    ],
-    'trsp:att.54317F78CB': [
-      'Multidisciplinary research data across all disciplines',
-    ],
-    'trsp:att.543A727F84': ['Other'],
-    'trsp:att.6A715E3A22': ['Institutional Repository'],
-    'trsp:att.6AF56A372D': ['DataCite Metadata Schema', 'Dublin Core'],
-    'trsp:att.6B7CED5897': [
-      'Open access and restricted access per dataset settings',
-    ],
-    'trsp:att.6EF77F35F8': ['Structural Income or Budget Allocation'],
-    'trsp:att.7298144E24': ['OAI-PMH Harvesting Endpoint'],
-    'trsp:att.768DAFA0DB': [
-      'Long-term preservation; minimum 10 years per UK funder requirements; RADAR platform',
-    ],
-    'trsp:att.78CC017229': ['No'],
-    'trsp:att.7C68DBB456': [
-      'Institutional – Oxford Brookes University Library',
-    ],
-  },
+  'https://radar.brookes.ac.uk/radar/hierarchy.do?topic=86e2c9d7-ef43-4b54-a387-3223d30acd3b':
+    {
+      'trsp:att.01D16EFB9B': [
+        'Oxford Brookes University; UKRI; UK research funders; Jisc',
+      ],
+      'trsp:att.035ACCB10D': [
+        'Institutional research data repository of Oxford Brookes University (Research Archive and Digital Asset Repository – RADAR). Supports data sharing and open access compliance for Oxford Brookes researchers across all faculties.',
+      ],
+      'trsp:att.1BF23E39F5': ['All common formats'],
+      'trsp:att.1D00720769': ['Minimum 10 years'],
+      'trsp:att.241E6C58DF': ['EOSC', 'Jisc', 'OpenAIRE'],
+      'trsp:att.27C898E8A0': ['None', 'Not certified'],
+      'trsp:att.2F993B25AD': ['DOI'],
+      'trsp:att.394BC515E7': ['No'],
+      'trsp:att.3B633179C5': ['Multiple/General'],
+      'trsp:att.4570870110': ['United Kingdom'],
+      'trsp:att.48BF7E1522': ['2018'],
+      'trsp:att.494B22C440': ['Institutional'],
+      'trsp:att.521A4A9E17': [
+        'Oxford Brookes University researchers; open for reuse internationally',
+      ],
+      'trsp:att.54317F78CB': [
+        'Multidisciplinary research data across all disciplines',
+      ],
+      'trsp:att.543A727F84': ['Other'],
+      'trsp:att.6A715E3A22': ['Institutional Repository'],
+      'trsp:att.6AF56A372D': ['DataCite Metadata Schema', 'Dublin Core'],
+      'trsp:att.6B7CED5897': [
+        'Open access and restricted access per dataset settings',
+      ],
+      'trsp:att.6EF77F35F8': ['Structural Income or Budget Allocation'],
+      'trsp:att.7298144E24': ['OAI-PMH Harvesting Endpoint'],
+      'trsp:att.768DAFA0DB': [
+        'Long-term preservation; minimum 10 years per UK funder requirements; RADAR platform',
+      ],
+      'trsp:att.78CC017229': ['No'],
+      'trsp:att.7C68DBB456': [
+        'Institutional – Oxford Brookes University Library',
+      ],
+    },
   'https://radar.ibiss.bg.ac.rs': {
     'trsp:att.01D16EFB9B': [
       'IBISS; University of Belgrade; Ministry of Education, Science and Technological Development of Serbia',
@@ -2559,7 +2560,7 @@ const ATTRIBUTES: AttributeFallbacks = {
       'Institutional – Faculty of Social Sciences (FDV), University of Ljubljana; supported by Slovenian Research Agency (ARRS)',
     ],
   },
-  'https://www.cessda.eu/Strategy-Expertise/Trust-and-Standards': {
+  'https://www.cessda.eu': {
     'trsp:att.01D16EFB9B': [
       '15+ European member countries (national governments or delegated institutions); national social science data archives as Service Providers; European social science research community; ESFRI; European Commission',
     ],
@@ -2687,7 +2688,7 @@ const ATTRIBUTES: AttributeFallbacks = {
       'European Research Infrastructure Consortium (ERIC) governed by General Assembly of national members; Board of Directors for management; Executive Director; Scientific Advisory Board; National Coordinators Forum for cross-country coordination',
     ],
   },
-  'https://www.crossda.hr': {
+  'https://data.crossda.hr': {
     'trsp:att.01D16EFB9B': [
       'Institute for Social Research in Zagreb; Croatian Ministry of Science and Education; CESSDA; Croatian social science research community',
     ],
@@ -2820,7 +2821,7 @@ const ATTRIBUTES: AttributeFallbacks = {
       'Institutional unit of Tampere University; funded by Finnish Ministry of Education and Culture',
     ],
   },
-  'https://www.gesis.org/en/data-services/share-data': {
+  'https://www.gesis.org/en/data-services': {
     'trsp:att.01D16EFB9B': [
       'German Federal Government; German State Governments (Länder); 60 German universities (members of GESIS e.V.); researchers and institutions using GESIS data services',
     ],
@@ -2871,7 +2872,7 @@ const ATTRIBUTES: AttributeFallbacks = {
       'Non-profit association (GESIS e.V.); jointly funded by German federal government and 16 state governments (Article 91b of German Basic Law); member of Leibniz Association; seven-year funding cycles',
     ],
   },
-  'https://www.granthub.cz': {
+  'https://granthub.cz': {
     'trsp:att.01D16EFB9B': [
       'Startups, scaleups and SMEs; research institutions; investors and funds; innovation hubs and consortia; EU funding applicants; pan-European innovation ecosystem',
     ],
@@ -2973,7 +2974,7 @@ const ATTRIBUTES: AttributeFallbacks = {
       'Consortium – FIN-CLARIN consortium of Finnish universities; CSC provides technical infrastructure; governance by FIN-CLARIN management group; funded by Academy of Finland and Ministry of Education and Culture',
     ],
   },
-  'https://www.myLaminin.net': {
+  'https://www.mylaminin.net': {
     'trsp:att.01D16EFB9B': [
       'Principal Investigators; research-intensive institutions; Research Ethics Boards; Legal Services; EOSC Association; ARDC',
     ],
@@ -3133,7 +3134,7 @@ const ATTRIBUTES: AttributeFallbacks = {
       'Community-driven – international consortium of PSNC, EGI, University of Manchester; funded through EU Horizon projects',
     ],
   },
-  'https://www.socib.es/en/what-we-do/metocean-data/socib-data-repository': {
+  'https://www.socib.es/en': {
     'trsp:att.01D16EFB9B': [
       'CSIC; Government of the Balearic Islands; Spanish Ministry of Science, Innovation and Universities; EU Copernicus programme; international oceanographic community',
     ],
@@ -3232,7 +3233,7 @@ const ATTRIBUTES: AttributeFallbacks = {
       'Community-driven; operated by SCK CEN; governed by MELODI consortium with European radiation biology community',
     ],
   },
-  'https://www.swissubase.ch': {
+  'https://www.swissubase.ch/en': {
     'trsp:att.01D16EFB9B': [
       'FORS (lead); University of Lausanne; University of Zurich; University of Neuchâtel; DaSCH (collaborating partner for humanities from 2024); swissuniversities; SNSF; SWITCH (infrastructure hosting)',
     ],
@@ -3395,11 +3396,6 @@ const ATTRIBUTES: AttributeFallbacks = {
     },
 };
 
-const ALIASES: Readonly<Record<string, string>> = {
-  'https://data.crossda.hr': 'https://www.crossda.hr',
-  'https://www.swissubase.ch/en': 'https://www.swissubase.ch',
-};
-
 const normalizeRepositoryIri = (iri: string): string => {
   try {
     const url = new URL(iri);
@@ -3425,7 +3421,7 @@ export const addRepositoryAttributeFallback = (
     if (typeof id !== 'string') return node;
 
     const normalizedId = normalizeRepositoryIri(id);
-    const attributes = ATTRIBUTES[ALIASES[normalizedId] ?? normalizedId];
+    const attributes = ATTRIBUTES[normalizedId];
     if (!attributes) return node;
 
     let enriched = node;

@@ -21,7 +21,7 @@ const MEMBERSHIPS: Readonly<Record<string, readonly string[]>> = {
     'trsp:profile.3E1A5A4B73',
   ],
   'https://dataverse.csuc.cat': ['trsp:profile.3C2D6C1C37'],
-  'https://phaidra.cab.unipd.it': ['trsp:profile.3C2D6C1C37'],
+  'https://phaidra.unipd.it': ['trsp:profile.3C2D6C1C37'],
   'https://www.clarin.eu/content/national-consortia': [
     'trsp:profile.3C2D6C1C37',
     'trsp:profile.5C32EF8367',
@@ -32,10 +32,8 @@ const MEMBERSHIPS: Readonly<Record<string, readonly string[]>> = {
     'trsp:profile.3C2D6C1C37',
     'trsp:profile.4B12A4A8E3',
   ],
-  'https://radar.brookes.ac.uk': [
-    'trsp:profile.3C2D6C1C37',
-    'trsp:profile.54A6CD95F4',
-  ],
+  'https://radar.brookes.ac.uk/radar/hierarchy.do?topic=86e2c9d7-ef43-4b54-a387-3223d30acd3b':
+    ['trsp:profile.3C2D6C1C37', 'trsp:profile.54A6CD95F4'],
   'https://gude.uni-frankfurt.de/home': [
     'trsp:profile.3C2D6C1C37',
     'trsp:profile.5F8F8C0526',
@@ -47,10 +45,6 @@ const MEMBERSHIPS: Readonly<Record<string, readonly string[]>> = {
   'https://radar.ibiss.bg.ac.rs': [
     'trsp:profile.3C2D6C1C37',
     'trsp:profile.610A896E75',
-  ],
-  'https://www.crossda.hr': [
-    'trsp:profile.31C7106603',
-    'trsp:profile.3C2D6C1C37',
   ],
   'https://data.crossda.hr': [
     'trsp:profile.31C7106603',
@@ -83,7 +77,7 @@ const MEMBERSHIPS: Readonly<Record<string, readonly string[]>> = {
     'trsp:profile.29A444BA70',
     'trsp:profile.3C2D6C1C37',
   ],
-  'https://www.granthub.cz': ['trsp:profile.3C2D6C1C37'],
+  'https://granthub.cz': ['trsp:profile.3C2D6C1C37'],
   'https://dataverse.no/dataverse/trolling': ['trsp:profile.3C2D6C1C37'],
   'https://dass.credi.ba': [
     'trsp:profile.0180636A61',
@@ -141,7 +135,7 @@ const MEMBERSHIPS: Readonly<Record<string, readonly string[]>> = {
     'trsp:profile.3C2D6C1C37',
     'trsp:profile.67FF569AA0',
   ],
-  'https://agroportal.eu': [
+  'https://agroportal.lirmm.fr': [
     'trsp:profile.245EF9D7AE',
     'trsp:profile.3C2D6C1C37',
   ],
@@ -150,9 +144,7 @@ const MEMBERSHIPS: Readonly<Record<string, readonly string[]>> = {
     'trsp:profile.3C2D6C1C37',
   ],
   'https://datashare.ed.ac.uk': ['trsp:profile.3C2D6C1C37'],
-  'https://www.gesis.org/en/data-services/share-data': [
-    'trsp:profile.3C2D6C1C37',
-  ],
+  'https://www.gesis.org/en/data-services': ['trsp:profile.3C2D6C1C37'],
   'http://www.pist.tn': ['trsp:profile.3C2D6C1C37'],
   'https://string-db.org': [
     'trsp:profile.3C2D6C1C37',
@@ -172,9 +164,7 @@ const MEMBERSHIPS: Readonly<Record<string, readonly string[]>> = {
     'trsp:profile.408BAAA2BA',
   ],
   'https://data.esrf.fr': ['trsp:profile.3C2D6C1C37'],
-  'https://www.socib.es/en/what-we-do/metocean-data/socib-data-repository': [
-    'trsp:profile.3C2D6C1C37',
-  ],
+  'https://www.socib.es/en': ['trsp:profile.3C2D6C1C37'],
   'https://dv.dataverse.lv/dataverse/root': [
     'trsp:profile.0CBE4E6DFC',
     'trsp:profile.3C2D6C1C37',
@@ -189,7 +179,7 @@ const MEMBERSHIPS: Readonly<Record<string, readonly string[]>> = {
     'trsp:profile.3C2D6C1C37',
     'trsp:profile.6668C83282',
   ],
-  'https://data.utm.csic.es': ['trsp:profile.3C2D6C1C37'],
+  'https://data.utm.csic.es/portal': ['trsp:profile.3C2D6C1C37'],
   'https://disprot.org': ['trsp:profile.3C2D6C1C37'],
   'https://dans.knaw.nl/nl/social-sciences-and-humanities': [
     'trsp:profile.3C2D6C1C37',
@@ -199,15 +189,12 @@ const MEMBERSHIPS: Readonly<Record<string, readonly string[]>> = {
     'trsp:profile.007276AA14',
     'trsp:profile.3C2D6C1C37',
   ],
-  'https://www.swissubase.ch': ['trsp:profile.3C2D6C1C37'],
   'https://www.swissubase.ch/en': ['trsp:profile.3C2D6C1C37'],
   'https://datarepositorium.uminho.pt': [
     'trsp:profile.346AA2D576',
     'trsp:profile.3C2D6C1C37',
   ],
-  'https://www.cessda.eu/Strategy-Expertise/Trust-and-Standards': [
-    'trsp:profile.3C2D6C1C37',
-  ],
+  'https://www.cessda.eu': ['trsp:profile.3C2D6C1C37'],
 };
 
 const normalizeRepositoryIri = (iri: string): string => {
