@@ -59,19 +59,21 @@ export class JsonldProcessingService {
     }
 
     return this.dropPolicyDocuments(
-      this.deriveYearEstablished(
-        addRepositoryAttributeFallback(
-          addProfileMembershipFallback(
-            this.normalizeTypeArrays(
-              this.deriveParent(
-                this.deriveCategory(
-                  this.addPolicyLabels(
-                    this.labelEnrichment.enrichLabels(
-                      this.addBackReferences(
-                        this.qualityMeasurements.fold(
-                          this.repairHostBakedTypes(
-                            this.embedBlankNodes(nodes),
-                            datasetPath,
+      this.deriveLanguage(
+        this.deriveYearEstablished(
+          addRepositoryAttributeFallback(
+            addProfileMembershipFallback(
+              this.normalizeTypeArrays(
+                this.deriveParent(
+                  this.deriveCategory(
+                    this.addPolicyLabels(
+                      this.labelEnrichment.enrichLabels(
+                        this.addBackReferences(
+                          this.qualityMeasurements.fold(
+                            this.repairHostBakedTypes(
+                              this.embedBlankNodes(nodes),
+                              datasetPath,
+                            ),
                           ),
                         ),
                       ),
@@ -84,6 +86,24 @@ export class JsonldProcessingService {
         ),
       ),
     );
+  }
+
+  // Sources mix ISO 639-1, ISO 639-3 and regional tags (en, eng, en-US);
+  // Intl.Locale canonicalises all of them to one language subtag.
+  private deriveLanguage(nodes: JsonLdNode[]): JsonLdNode[] {
+    return nodes.map((node) => {
+      const raw = node['dct:language'];
+      if (raw == null) return node;
+      const codes = new Set<string>();
+      for (const value of Array.isArray(raw) ? raw : [raw]) {
+        try {
+          codes.add(new Intl.Locale(String(value)).language);
+        } catch {
+          // Not a language tag; dct:language keeps the raw value.
+        }
+      }
+      return codes.size ? { ...node, _language: [...codes] } : node;
+    });
   }
 
   private deriveYearEstablished(nodes: JsonLdNode[]): JsonLdNode[] {

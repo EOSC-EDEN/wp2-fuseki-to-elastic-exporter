@@ -88,6 +88,22 @@ describe('JsonldProcessingService', () => {
       expect(result[0]['_yearEstablished']).toBe('1984-01-01');
     });
 
+    it('normalises languages to ISO 639-1 codes', async () => {
+      const document = {
+        '@context': {
+          dcat: 'http://www.w3.org/ns/dcat#',
+          dct: 'http://purl.org/dc/terms/',
+        },
+        '@id': 'https://example.org/repository',
+        '@type': 'dcat:Catalog',
+        'dct:language': ['eng', 'en-US', 'nld', 'not a language'],
+      };
+
+      const result = await service.flatten(document);
+
+      expect(result[0]['_language']).toEqual(['en', 'nl']);
+    });
+
     it('adds static profile memberships for a known repository when the graph has none', async () => {
       const document = {
         '@context': {
