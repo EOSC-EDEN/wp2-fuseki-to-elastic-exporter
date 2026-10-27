@@ -134,6 +134,17 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  kb:
+    image: dansknaw/eden-registry-kb:0.0.1
+    build: ../wp2-registry-kb
+    environment:
+      FUSEKI_URL: http://fuseki:3030/eden
+      FUSEKI_USERNAME: ${FUSEKI_USERNAME:-admin}
+      FUSEKI_PASSWORD: ${FUSEKI_PASSWORD:-admin}
+    depends_on:
+      fuseki:
+        condition: service_started
+
   registry-attributes-service:
     build: ../attributes/eden-wp2-registry-attributes-service
     image: eden-wp2-registry-attributes-service
