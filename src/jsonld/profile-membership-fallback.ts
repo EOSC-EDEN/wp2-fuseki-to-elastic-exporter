@@ -1,3 +1,5 @@
+import { normalizeRepositoryIri } from './repository-iri';
+
 type JsonLdNode = Record<string, unknown>;
 
 /**
@@ -195,18 +197,6 @@ const MEMBERSHIPS: Readonly<Record<string, readonly string[]>> = {
     'trsp:profile.3C2D6C1C37',
   ],
   'https://www.cessda.eu': ['trsp:profile.3C2D6C1C37'],
-};
-
-const normalizeRepositoryIri = (iri: string): string => {
-  try {
-    const url = new URL(iri);
-    url.hash = '';
-    url.hostname = url.hostname.toLowerCase();
-    url.pathname = url.pathname === '/' ? '' : url.pathname.replace(/\/+$/, '');
-    return url.toString().replace(/\/$/, '');
-  } catch {
-    return iri.replace(/\/+$/, '');
-  }
 };
 
 export const addProfileMembershipFallback = (

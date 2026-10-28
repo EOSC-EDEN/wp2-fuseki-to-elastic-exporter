@@ -25,6 +25,20 @@ describe('FusekiService', () => {
     jest.restoreAllMocks();
   });
 
+  describe('select', () => {
+    it('should return the result bindings', async () => {
+      const bindings = [{ g: { value: 'eden://a' } }];
+      jest.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ results: { bindings } }),
+      } as unknown as Response);
+
+      await expect(
+        service.select('SELECT ?g WHERE { GRAPH ?g {} }'),
+      ).resolves.toEqual(bindings);
+    });
+  });
+
   describe('graphFingerprints', () => {
     it('should return one fingerprint per graph from a single query', async () => {
       const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({

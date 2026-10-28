@@ -22,6 +22,31 @@ export class FusekiService {
     }
   }
 
+  async select(
+    query: string,
+  ): Promise<Array<Record<string, { value: string }>>> {
+    const url = `${this.endpoint}/sparql?query=${encodeURIComponent(query)}`;
+
+    const response = await fetch(url, {
+      headers: {
+        Accept: 'application/sparql-results+json',
+        ...this.authHeaders,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `SPARQL query failed: ${response.status} ${response.statusText}`,
+      );
+    }
+
+    const json = (await response.json()) as {
+      results: { bindings: Array<Record<string, { value: string }>> };
+    };
+
+    return json.results.bindings;
+  }
+
   async listNamedGraphs(): Promise<string[]> {
     const query = 'SELECT DISTINCT ?g WHERE { GRAPH ?g { ?s ?p ?o } }';
     const url = `${this.endpoint}/sparql?query=${encodeURIComponent(query)}`;

@@ -1,3 +1,5 @@
+import { normalizeRepositoryIri } from './repository-iri';
+
 type JsonLdNode = Record<string, unknown>;
 
 type AttributeFallbacks = Readonly<
@@ -3394,18 +3396,6 @@ const ATTRIBUTES: AttributeFallbacks = {
         'Community-driven – OSCARS project consortium; hosted on Zenodo as a community collection',
       ],
     },
-};
-
-const normalizeRepositoryIri = (iri: string): string => {
-  try {
-    const url = new URL(iri);
-    url.hash = '';
-    url.hostname = url.hostname.toLowerCase();
-    url.pathname = url.pathname === '/' ? '' : url.pathname.replace(/\/+$/, '');
-    return url.toString().replace(/\/$/, '');
-  } catch {
-    return iri.replace(/\/+$/, '');
-  }
 };
 
 export const addRepositoryAttributeFallback = (
