@@ -143,47 +143,12 @@ describe('JsonldProcessingService', () => {
       expect(result[0]['_language']).toEqual(['en', 'nl']);
     });
 
-    it('adds static profile memberships for a known repository when the graph has none', async () => {
+    it('does not add profile memberships to a repository', async () => {
       const document = {
         '@context': {
           dcat: 'http://www.w3.org/ns/dcat#',
         },
         '@id': 'https://dais.sanu.ac.rs/',
-        '@type': 'dcat:Catalog',
-      };
-
-      const result = await service.flatten(document);
-
-      expect(result[0]['trsp:hasApplicableProfile']).toEqual([
-        'trsp:profile.39A738E4E3',
-        'trsp:profile.3C2D6C1C37',
-      ]);
-    });
-
-    it('keeps graph-provided profile memberships authoritative', async () => {
-      const document = {
-        '@context': {
-          dcat: 'http://www.w3.org/ns/dcat#',
-          trsp: 'https://w3id.org/trsp/',
-        },
-        '@id': 'https://dais.sanu.ac.rs/',
-        '@type': 'dcat:Catalog',
-        'trsp:hasApplicableProfile': 'trsp:profile.graph-provided',
-      };
-
-      const result = await service.flatten(document);
-
-      expect(result[0]['trsp:hasApplicableProfile']).toBe(
-        'trsp:profile.graph-provided',
-      );
-    });
-
-    it('does not invent profile memberships for an unknown repository', async () => {
-      const document = {
-        '@context': {
-          dcat: 'http://www.w3.org/ns/dcat#',
-        },
-        '@id': 'https://unknown.example/repository',
         '@type': 'dcat:Catalog',
       };
 
