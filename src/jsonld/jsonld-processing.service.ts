@@ -8,6 +8,8 @@ import { QualityMeasurementsService } from './quality-measurements.service';
 import { addProfileMembershipFallback } from './profile-membership-fallback';
 import { addRepositoryAttributeFallback } from './repository-attribute-fallback';
 import { FUSEKI_CONFIG_KEY, type FusekiConfig } from '../config';
+import { KbService } from '../kb/kb.service';
+import { assignProfiles } from '../kb/profile-assignment';
 
 type JsonLdNode = Record<string, unknown>;
 
@@ -24,6 +26,7 @@ export class JsonldProcessingService {
     private readonly labelEnrichment: LabelEnrichmentService,
     private readonly qualityMeasurements: QualityMeasurementsService,
     private readonly configService: ConfigService,
+    private readonly kb: KbService,
   ) {
     // Host-baked type IRIs carry the dataset path, so the repair needs to know
     // it. FUSEKI_ENDPOINT is a URL such as http://fuseki:3030/eden.
@@ -50,6 +53,7 @@ export class JsonldProcessingService {
       CANONICAL_CONTEXT as unknown as ContextDefinition,
     );
 
+    const kb = await this.kb.load();
     let nodes: JsonLdNode[];
     if (Array.isArray(flattened)) {
       nodes = flattened as JsonLdNode[];
@@ -61,18 +65,20 @@ export class JsonldProcessingService {
     return this.dropPolicyDocuments(
       this.deriveLanguage(
         this.deriveYearEstablished(
-          addRepositoryAttributeFallback(
-            addProfileMembershipFallback(
-              this.normalizeTypeArrays(
-                this.deriveParent(
-                  this.deriveCategory(
-                    this.addPolicyLabels(
-                      this.labelEnrichment.enrichLabels(
-                        this.addBackReferences(
-                          this.qualityMeasurements.fold(
-                            this.repairHostBakedTypes(
-                              this.embedBlankNodes(nodes),
-                              datasetPath,
+          assignProfiles(
+            addRepositoryAttributeFallback(
+              addProfileMembershipFallback(
+                this.normalizeTypeArrays(
+                  this.deriveParent(
+                    this.deriveCategory(
+                      this.addPolicyLabels(
+                        this.labelEnrichment.enrichLabels(
+                          this.addBackReferences(
+                            this.qualityMeasurements.fold(
+                              this.repairHostBakedTypes(
+                                this.embedBlankNodes(nodes),
+                                datasetPath,
+                              ),
                             ),
                           ),
                         ),
@@ -82,6 +88,7 @@ export class JsonldProcessingService {
                 ),
               ),
             ),
+            kb,
           ),
         ),
       ),

@@ -3,23 +3,62 @@ import { JsonldProcessingService } from './jsonld-processing.service';
 import { LabelEnrichmentService } from './label-enrichment.service';
 import { QualityMeasurementsService } from './quality-measurements.service';
 import { FUSEKI_CONFIG_KEY } from '../config';
+import type { KbService } from '../kb/kb.service';
+import { EMPTY_KNOWLEDGE_BASE, type KnowledgeBase } from '../kb/knowledge-base';
 
 describe('JsonldProcessingService', () => {
   let service: JsonldProcessingService;
 
-  beforeEach(() => {
-    const configService = {
-      get: (key: symbol) =>
-        key === FUSEKI_CONFIG_KEY
-          ? { FUSEKI_ENDPOINT: 'http://fuseki:3030/eden' }
-          : undefined,
-    } as unknown as ConfigService;
+  const configService = {
+    get: (key: symbol) =>
+      key === FUSEKI_CONFIG_KEY
+        ? { FUSEKI_ENDPOINT: 'http://fuseki:3030/eden' }
+        : undefined,
+  } as unknown as ConfigService;
 
-    service = new JsonldProcessingService(
+  const serviceWith = (kb: KnowledgeBase) =>
+    new JsonldProcessingService(
       new LabelEnrichmentService(),
       new QualityMeasurementsService(),
       configService,
+      { load: () => Promise.resolve(kb) } as unknown as KbService,
     );
+
+  beforeEach(() => {
+    service = serviceWith(EMPTY_KNOWLEDGE_BASE);
+  });
+
+  describe('knowledge base', () => {
+    it('adds _conformsTo to a flattened repository', async () => {
+      const nodes = await serviceWith({
+        profiles: [
+          {
+            iri: 'trsp:profile.X',
+            label: 'Test profile',
+            minimumCoverage: 0.5,
+            properties: [{ attribute: 'trsp:att.64DA341B5F', mandatory: true }],
+          },
+        ],
+        attributeLabels: new Map([['trsp:att.64DA341B5F', 'Repository Name']]),
+        memberships: new Map(),
+      }).flatten({
+        '@context': {
+          dcat: 'http://www.w3.org/ns/dcat#',
+          trsp: 'https://w3id.org/trsp/',
+        },
+        '@graph': [
+          {
+            '@id': 'https://example.org/',
+            '@type': 'dcat:Catalog',
+            'trsp:att.64DA341B5F': 'Example Repository',
+          },
+        ],
+      });
+
+      const repository = nodes.find((n) => n['@id'] === 'https://example.org/');
+      expect(repository?._conformsTo).toEqual(['Test profile']);
+      expect(repository?._hasAttribute).toEqual(['Repository Name']);
+    });
   });
 
   describe('flatten', () => {

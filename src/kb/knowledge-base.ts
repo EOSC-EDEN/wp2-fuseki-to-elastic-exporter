@@ -17,7 +17,8 @@ export interface KnowledgeBase {
   profiles: KbProfile[];
   // Attribute IRI to its label.
   attributeLabels: ReadonlyMap<string, string>;
-  // normalizeRepositoryIri(repository) to the IRIs of the profiles it is a member of.
+  // normalizeRepositoryIri(repository) to the IRIs of the profiles the KB
+  // assigns to it by hand.
   memberships: ReadonlyMap<string, string[]>;
 }
 
