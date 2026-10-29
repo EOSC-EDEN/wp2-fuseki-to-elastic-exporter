@@ -5,7 +5,6 @@ import type { ContextDefinition, JsonLdDocument } from 'jsonld';
 import { LabelEnrichmentService } from './label-enrichment.service';
 import { CANONICAL_CONTEXT, normalizeTypeIri } from './canonical-context';
 import { QualityMeasurementsService } from './quality-measurements.service';
-import { addRepositoryAttributeFallback } from './repository-attribute-fallback';
 import { FUSEKI_CONFIG_KEY, type FusekiConfig } from '../config';
 import { KbService } from '../kb/kb.service';
 import { assignProfiles } from '../kb/profile-assignment';
@@ -65,18 +64,16 @@ export class JsonldProcessingService {
       this.deriveLanguage(
         this.deriveYearEstablished(
           assignProfiles(
-            addRepositoryAttributeFallback(
-              this.normalizeTypeArrays(
-                this.deriveParent(
-                  this.deriveCategory(
-                    this.addPolicyLabels(
-                      this.labelEnrichment.enrichLabels(
-                        this.addBackReferences(
-                          this.qualityMeasurements.fold(
-                            this.repairHostBakedTypes(
-                              this.embedBlankNodes(nodes),
-                              datasetPath,
-                            ),
+            this.normalizeTypeArrays(
+              this.deriveParent(
+                this.deriveCategory(
+                  this.addPolicyLabels(
+                    this.labelEnrichment.enrichLabels(
+                      this.addBackReferences(
+                        this.qualityMeasurements.fold(
+                          this.repairHostBakedTypes(
+                            this.embedBlankNodes(nodes),
+                            datasetPath,
                           ),
                         ),
                       ),

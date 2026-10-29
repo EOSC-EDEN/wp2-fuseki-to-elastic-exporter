@@ -62,55 +62,6 @@ describe('JsonldProcessingService', () => {
   });
 
   describe('flatten', () => {
-    it('adds static FIDELIS attributes for a known repository when the graph has none', async () => {
-      const document = {
-        '@context': {
-          dcat: 'http://www.w3.org/ns/dcat#',
-        },
-        '@id': 'https://www.wdc-climate.de/ui/',
-        '@type': 'dcat:Catalog',
-      };
-
-      const result = await service.flatten(document);
-
-      expect(result[0]).toMatchObject({
-        'trsp:att.4570870110': ['Germany'],
-        'trsp:att.48BF7E1522': ['1999'],
-        'trsp:att.6A715E3A22': ['Discipline-specific Repository'],
-        'trsp:att.27C898E8A0': [
-          'Certified',
-          'CoreTrustSeal Certification',
-          'WDS accreditation',
-        ],
-        'trsp:att.241E6C58DF': [
-          'CMIP infrastructure',
-          'EOSC',
-          'ICSU World Data System (WDS; regular member since 2003)',
-          'IS-ENES',
-          'WMO (Data Collection and Processing Centre – DCPC)',
-        ],
-      });
-    });
-
-    it('keeps each graph-provided FIDELIS attribute authoritative while filling other gaps', async () => {
-      const document = {
-        '@context': {
-          dcat: 'http://www.w3.org/ns/dcat#',
-          trsp: 'https://w3id.org/trsp/',
-        },
-        '@id': 'https://www.wdc-climate.de/ui/',
-        '@type': 'dcat:Catalog',
-        'trsp:att.4570870110': 'Graph country',
-        'trsp:att.27C898E8A0': 'Graph certification',
-      };
-
-      const result = await service.flatten(document);
-
-      expect(result[0]['trsp:att.4570870110']).toBe('Graph country');
-      expect(result[0]['trsp:att.27C898E8A0']).toBe('Graph certification');
-      expect(result[0]['trsp:att.48BF7E1522']).toEqual(['1999']);
-    });
-
     it('projects a four-digit year established as a searchable date', async () => {
       const document = {
         '@context': {
@@ -155,6 +106,20 @@ describe('JsonldProcessingService', () => {
       const result = await service.flatten(document);
 
       expect(result[0]['trsp:hasApplicableProfile']).toBeUndefined();
+    });
+
+    it('does not add attribute values to a repository', async () => {
+      const document = {
+        '@context': {
+          dcat: 'http://www.w3.org/ns/dcat#',
+        },
+        '@id': 'http://www.pist.tn',
+        '@type': 'dcat:Catalog',
+      };
+
+      const result = await service.flatten(document);
+
+      expect(result[0]['trsp:att.78CC017229']).toBeUndefined();
     });
 
     it('should flatten a JSON-LD document and return URI nodes', async () => {

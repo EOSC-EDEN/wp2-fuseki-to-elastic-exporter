@@ -135,7 +135,7 @@ services:
     restart: unless-stopped
 
   kb:
-    image: dansknaw/eden-registry-kb:0.0.1
+    image: dansknaw/eden-registry-kb:0.0.2
     build: ../wp2-registry-kb
     environment:
       FUSEKI_URL: http://fuseki:3030/eden
